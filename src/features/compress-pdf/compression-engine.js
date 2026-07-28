@@ -378,41 +378,67 @@ export async function chooseCompressionSettings(
   })[0];
 }
 
-export function calculateRefinementSettings(settings, outputBytes, targetBytes) {
-  // Nhắm khoảng 98% mục tiêu để chừa sai số nhỏ và hạn chế vượt dung lượng.
-  const desiredBytes = targetBytes * 0.98;
-  const ratio = desiredBytes / Math.max(1, outputBytes);
+export function calculateRefinementSettings(
+  settings,
+  outputBytes,
+  targetBytes,
+  { mode = "balanced", previousDirection = null } = {}
+) {
+  const desiredBytes = targetBytes * COMPRESSION_LIMITS.REFINEMENT_TARGET_RATIO;
+  const rawRatio = desiredBytes / Math.max(1, outputBytes);
 
-  if (ratio > 1) {
-    // File nhỏ hơn mục tiêu: tăng chất lượng có kiểm soát.
+  if (rawRatio > 1) {
+    // Kết quả đang quá nhỏ. Tăng DPI để chữ rõ hơn, tăng JPEG nhẹ để tránh nhảy quá xa.
+    // Giới hạn mỗi lần tăng để có thể hiệu chỉnh lần 2 nếu cần.
+    const dpiWeight = mode === "text" ? 1.0 : mode === "image" ? 0.72 : 0.86;
+    const desiredDpiFactor = rawRatio ** (0.5 * dpiWeight);
+    const maxDpiFactor = previousDirection === "down" ? 1.055 : 1.12;
+    const dpiFactor = clamp(desiredDpiFactor, 1.015, maxDpiFactor);
+
+    const qualityStepBase = Math.round((rawRatio - 1) * (mode === "image" ? 24 : 16));
+    const qualityStep = clamp(
+      qualityStepBase,
+      1,
+      previousDirection === "down" ? 3 : 7
+    );
+
     return {
       ...settings,
       dpi: clamp(
-        roundToStep(settings.dpi * Math.sqrt(ratio) * 0.985, 5),
+        roundToStep(settings.dpi * dpiFactor, 5),
         COMPRESSION_LIMITS.MIN_DPI,
         COMPRESSION_LIMITS.MAX_DPI
       ),
       jpegQuality: clamp(
-        Math.round(settings.jpegQuality * Math.min(1.18, ratio ** 0.35)),
+        settings.jpegQuality + qualityStep,
         COMPRESSION_LIMITS.MIN_JPEG_QUALITY,
         COMPRESSION_LIMITS.MAX_JPEG_QUALITY
       )
     };
   }
 
-  // File vượt mục tiêu: giảm vừa đủ, không giảm quá sâu.
-  const boundedRatio = clamp(ratio, 0.1, 1);
+  // Kết quả vượt trần. Giảm vừa đủ, tránh tụt từ 4,7 MB xuống 3,0 MB.
+  const boundedRatio = clamp(rawRatio, 0.5, 1);
+  const desiredDpiFactor = Math.sqrt(boundedRatio);
+  const minDpiFactor = previousDirection === "up" ? 0.955 : 0.90;
+  const dpiFactor = clamp(desiredDpiFactor, minDpiFactor, 0.995);
+
+  const qualityDropBase = Math.round((1 - boundedRatio) * 20);
+  const qualityDrop = clamp(
+    qualityDropBase,
+    1,
+    previousDirection === "up" ? 3 : 7
+  );
+
   return {
     ...settings,
     dpi: clamp(
-      roundToStep(settings.dpi * Math.sqrt(boundedRatio) * 0.985, 5),
+      roundToStep(settings.dpi * dpiFactor, 5),
       COMPRESSION_LIMITS.MIN_DPI,
       COMPRESSION_LIMITS.MAX_DPI
     ),
     jpegQuality: clamp(
-      Math.round(
-        settings.jpegQuality * Math.max(0.76, boundedRatio ** 0.45) * 0.99
-      ),
+      settings.jpegQuality - qualityDrop,
       COMPRESSION_LIMITS.MIN_JPEG_QUALITY,
       COMPRESSION_LIMITS.MAX_JPEG_QUALITY
     )

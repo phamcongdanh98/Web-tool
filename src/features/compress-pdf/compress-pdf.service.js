@@ -1,20 +1,18 @@
 "use strict";
 
+import path from "node:path";
 import fsp from "node:fs/promises";
 import * as mupdf from "mupdf";
-
 import { AppError } from "../../core/errors/app-error.js";
 import {
   assertMemoryHeadroom,
   getMemorySnapshot,
   logMemory
 } from "../../core/monitoring/memory-monitor.js";
-
 import {
   COMPRESSION_LIMITS,
   validateCompressionOptions
 } from "./compress-pdf.options.js";
-
 import {
   buildRasterizedPdf,
   calculateRefinementSettings,
@@ -24,346 +22,212 @@ import {
   throwIfAborted
 } from "./compression-engine.js";
 
-const BYTES_PER_MB = 1024 * 1024;
+const MB = 1024 * 1024;
 
-function isLowMemoryServer(snapshot = getMemorySnapshot()) {
+function isLowMemory(snapshot = getMemorySnapshot()) {
   return (
     snapshot.cgroupLimitMb !== null &&
-    snapshot.cgroupLimitMb <=
-      COMPRESSION_LIMITS.LOW_MEMORY_LIMIT_MB
+    snapshot.cgroupLimitMb <= COMPRESSION_LIMITS.LOW_MEMORY_LIMIT_MB
   );
 }
 
-function validateLowMemoryRequest({
-  inputBytes,
-  options
-}) {
+function validateLowMemoryRequest({ inputBytes, options }) {
   const snapshot = getMemorySnapshot();
+  if (!isLowMemory(snapshot)) return;
 
-  if (!isLowMemoryServer(snapshot)) {
-    return;
-  }
-
-  const targetRatio =
-    options.targetBytes / Math.max(1, inputBytes);
-
-  if (
-    targetRatio <
-    COMPRESSION_LIMITS.LOW_MEMORY_MIN_TARGET_RATIO
-  ) {
-    const minimumTargetMb = Math.ceil(
-      (
-        inputBytes *
-        COMPRESSION_LIMITS
-          .LOW_MEMORY_MIN_TARGET_RATIO
-      ) /
-        BYTES_PER_MB
+  const targetRatio = options.targetBytes / Math.max(1, inputBytes);
+  if (targetRatio < COMPRESSION_LIMITS.LOW_MEMORY_MIN_TARGET_RATIO) {
+    const minimumMb = Math.ceil(
+      (inputBytes * COMPRESSION_LIMITS.LOW_MEMORY_MIN_TARGET_RATIO) / MB
     );
-
     throw new AppError(
       `Mục tiêu nén quá thấp đối với máy chủ RAM ${snapshot.cgroupLimitMb} MB. ` +
-        `Hãy chọn dung lượng mục tiêu ít nhất khoảng ${minimumTargetMb} MB.`,
+        `Hãy chọn dung lượng tối đa ít nhất khoảng ${minimumMb} MB.`,
       422,
       "TARGET_TOO_AGGRESSIVE"
     );
   }
 }
 
-function releaseOutputBytes() {
-  if (typeof global.gc === "function") {
-    global.gc();
+function settingsChanged(a, b) {
+  return a.dpi !== b.dpi || a.jpegQuality !== b.jpegQuality;
+}
+
+function forceGc() {
+  if (typeof global.gc === "function") global.gc();
+}
+
+async function removeSafe(filePath) {
+  try {
+    await fsp.rm(filePath, { force: true });
+  } catch {
+    // Bỏ qua lỗi dọn file tạm.
   }
 }
 
-function settingsAreDifferent(
-  currentSettings,
-  nextSettings
-) {
-  return (
-    nextSettings.dpi !== currentSettings.dpi ||
-    nextSettings.jpegQuality !==
-      currentSettings.jpegQuality
-  );
-}
-
-function getRefinementAttemptLimit(lowMemory) {
-  return lowMemory
-    ? COMPRESSION_LIMITS
-        .LOW_MEMORY_MAX_REFINEMENT_ATTEMPTS
-    : COMPRESSION_LIMITS.MAX_REFINEMENT_ATTEMPTS;
-}
-
-function getDesiredRefinementBytes(targetBytes) {
-  return Math.floor(
-    targetBytes *
-      COMPRESSION_LIMITS.REFINEMENT_TARGET_RATIO
-  );
-}
-
-function shouldRefineOutput({
-  outputLength,
-  targetBytes
-}) {
-  const sizeRatio =
-    outputLength / Math.max(1, targetBytes);
-
-  return {
-    sizeRatio,
-    isAboveTarget: outputLength > targetBytes,
-    isTooSmall:
-      sizeRatio <
-      COMPRESSION_LIMITS
-        .REFINEMENT_TRIGGER_LOWER_RATIO
-  };
-}
-
-function assertRefinementMemory({
-  lowMemory,
-  attempt
-}) {
-  assertMemoryHeadroom({
-    minimumFreeMb: lowMemory ? 90 : 160,
-    maximumUsagePercent: lowMemory ? 82 : 72,
-    stage: `before-refinement-${attempt}`
-  });
-}
-
 /**
- * Tinh chỉnh kết quả để:
- *
- * - Không vượt quá dung lượng tối đa.
- * - Không thấp hơn mục tiêu quá nhiều nếu còn RAM.
- * - Ưu tiên khoảng 97–100% mục tiêu.
+ * Dựng và hiệu chỉnh theo kết quả thật.
+ * Luôn lưu bản tốt nhất <= mục tiêu xuống ổ đĩa để không giữ nhiều PDF trong RAM.
  */
-async function refinePdfToTarget({
+async function buildClosestUnderTarget({
   document,
   allPages,
-  initialBytes,
   initialSettings,
+  inputBytes,
+  outputPath,
   options,
   onProgress,
   signal,
   logger,
   requestId
 }) {
-  let outputBytes = initialBytes;
-  let finalSettings = {
-    ...initialSettings
-  };
-
-  const lowMemory = isLowMemoryServer();
-  const maxAttempts =
-    getRefinementAttemptLimit(lowMemory);
-
-  const targetBytes = options.targetBytes;
-  const preferredMinimumBytes = Math.floor(
-    targetBytes *
-      COMPRESSION_LIMITS.TARGET_LOWER_RATIO
+  const lowMemory = isLowMemory();
+  const maxRefinements = lowMemory
+    ? COMPRESSION_LIMITS.LOW_MEMORY_MAX_REFINEMENT_ATTEMPTS
+    : COMPRESSION_LIMITS.MAX_REFINEMENT_ATTEMPTS;
+  const lowerBound = Math.floor(
+    options.targetBytes * COMPRESSION_LIMITS.TARGET_LOWER_RATIO
   );
+  const bestPath = `${outputPath}.best-${process.pid}.tmp`;
 
-  for (
-    let attempt = 1;
-    attempt <= maxAttempts;
-    attempt += 1
-  ) {
-    throwIfAborted(signal);
+  let settings = { ...initialSettings };
+  let previousDirection = null;
+  let bestBytes = null;
+  let bestSettings = null;
+  let lastLength = null;
 
-    const currentLength = outputBytes.length;
+  await removeSafe(bestPath);
 
-    const {
-      sizeRatio,
-      isAboveTarget,
-      isTooSmall
-    } = shouldRefineOutput({
-      outputLength: currentLength,
-      targetBytes
-    });
+  try {
+    for (let attempt = 0; attempt <= maxRefinements; attempt += 1) {
+      throwIfAborted(signal);
 
-    /*
-     * Kết quả đã nằm trong vùng mong muốn:
-     * khoảng 97–100% mục tiêu.
-     */
-    if (
-      currentLength <= targetBytes &&
-      currentLength >= preferredMinimumBytes
-    ) {
+      logger?.info(
+        { requestId, attempt: attempt + 1, settings, targetBytes: options.targetBytes },
+        attempt === 0
+          ? "Bắt đầu dựng PDF lần đầu"
+          : "Bắt đầu dựng PDF tinh chỉnh"
+      );
+
+      let bytes = await buildRasterizedPdf(document, allPages, settings, {
+        onProgress,
+        signal
+      });
+      const length = bytes.length;
+      lastLength = length;
+
       logger?.info(
         {
           requestId,
-          attempt,
-          outputBytes: currentLength,
-          targetBytes,
-          sizeRatio: Number(
-            sizeRatio.toFixed(4)
-          ),
-          finalSettings
+          attempt: attempt + 1,
+          outputBytes: length,
+          outputMb: Number((length / MB).toFixed(2)),
+          targetBytes: options.targetBytes,
+          targetMb: Number((options.targetBytes / MB).toFixed(2)),
+          settings
         },
-        "Kết quả PDF đã nằm trong vùng dung lượng mong muốn"
+        "Hoàn tất một lần dựng PDF"
       );
 
-      break;
-    }
+      // Chỉ giữ bản không vượt trần và gần trần nhất.
+      if (length <= options.targetBytes && (bestBytes === null || length > bestBytes)) {
+        await fsp.writeFile(bestPath, bytes);
+        bestBytes = length;
+        bestSettings = { ...settings };
+      }
 
-    /*
-     * File đã dưới mục tiêu và không quá nhỏ.
-     * Không cần dựng lại thêm.
-     */
-    if (!isAboveTarget && !isTooSmall) {
-      break;
-    }
+      // Đã nằm trong vùng 95–100%: đây là kết quả mong muốn.
+      if (length <= options.targetBytes && length >= lowerBound) {
+        await fsp.writeFile(outputPath, bytes);
+        bytes = null;
+        forceGc();
+        return {
+          outputBytes: length,
+          finalSettings: { ...settings },
+          reachedTarget: true,
+          closeToTarget: true
+        };
+      }
 
-    const desiredBytes =
-      getDesiredRefinementBytes(targetBytes);
-
-    const nextSettings =
-      calculateRefinementSettings(
-        finalSettings,
-        currentLength,
-        desiredBytes
-      );
-
-    if (
-      !settingsAreDifferent(
-        finalSettings,
-        nextSettings
-      )
-    ) {
-      logger?.warn(
-        {
-          requestId,
-          attempt,
-          outputBytes: currentLength,
-          targetBytes,
-          finalSettings
-        },
-        "Không thể thay đổi thêm cấu hình nén"
-      );
-
-      break;
-    }
-
-    const memoryBefore =
-      getMemorySnapshot();
-
-    /*
-     * Trên máy RAM thấp, nếu RAM đã quá cao thì:
-     * - Nếu file đã dưới mục tiêu: giữ kết quả hiện tại.
-     * - Nếu file vẫn vượt mục tiêu: trả lỗi rõ ràng.
-     */
-    if (
-      lowMemory &&
-      memoryBefore.cgroupUsagePercent !== null &&
-      memoryBefore.cgroupUsagePercent > 82
-    ) {
-      if (currentLength <= targetBytes) {
-        logger?.warn(
-          {
-            requestId,
-            attempt,
-            outputBytes: currentLength,
-            targetBytes,
-            memory: memoryBefore
-          },
-          "RAM không đủ để tăng thêm chất lượng; giữ kết quả hiện tại"
-        );
-
+      if (attempt >= maxRefinements) {
+        bytes = null;
+        forceGc();
         break;
       }
 
-      throw new AppError(
-        "Máy chủ không còn đủ RAM để đưa PDF xuống dưới dung lượng tối đa. " +
-          "Hãy giảm DPI, giảm chất lượng JPEG hoặc chuyển sang thang xám.",
-        507,
-        "INSUFFICIENT_MEMORY_FOR_TARGET"
-      );
-    }
-
-    /*
-     * Xóa kết quả lần trước khỏi RAM trước khi
-     * dựng lại toàn bộ PDF.
-     */
-    outputBytes = null;
-    releaseOutputBytes();
-
-    assertRefinementMemory({
-      lowMemory,
-      attempt
-    });
-
-    finalSettings = nextSettings;
-
-    logger?.warn(
-      {
-        requestId,
-        attempt,
-        maxAttempts,
-        previousBytes: currentLength,
-        targetBytes,
-        desiredBytes,
-        sizeRatio: Number(
-          sizeRatio.toFixed(4)
-        ),
-        finalSettings,
-        lowMemory
-      },
-      isAboveTarget
-        ? "PDF vượt dung lượng tối đa, đang dựng lại với cấu hình nhẹ hơn"
-        : "PDF thấp hơn mục tiêu quá nhiều, đang dựng lại để tăng chất lượng"
-    );
-
-    outputBytes =
-      await buildRasterizedPdf(
-        document,
-        allPages,
-        finalSettings,
+      const direction = length > options.targetBytes ? "down" : "up";
+      const nextSettings = calculateRefinementSettings(
+        settings,
+        length,
+        options.targetBytes,
         {
-          onProgress,
-          signal
+          mode: options.mode,
+          previousDirection
         }
       );
 
-    logger?.info(
-      {
-        requestId,
-        attempt,
-        outputBytes: outputBytes.length,
-        targetBytes,
-        finalSettings
-      },
-      "Hoàn tất một lần tinh chỉnh dung lượng PDF"
-    );
+      bytes = null;
+      forceGc();
 
-    logMemory(
-      logger,
-      "RAM sau khi tinh chỉnh PDF",
-      {
-        requestId,
-        attempt,
-        stage: `refinement-${attempt}`,
-        outputBytes: outputBytes.length
+      if (!settingsChanged(settings, nextSettings)) break;
+
+      const snapshot = getMemorySnapshot();
+      if (
+        lowMemory &&
+        snapshot.cgroupUsagePercent !== null &&
+        snapshot.cgroupUsagePercent > 80
+      ) {
+        logger?.warn(
+          { requestId, snapshot, bestBytes, lastLength },
+          "Dừng tinh chỉnh vì RAM đang cao; sử dụng bản tốt nhất đã lưu"
+        );
+        break;
       }
-    );
-  }
 
-  /*
-   * Mục tiêu là trần cứng.
-   * Không trả file lớn hơn dung lượng người dùng nhập.
-   */
-  if (outputBytes.length > targetBytes) {
+      assertMemoryHeadroom({
+        minimumFreeMb: lowMemory ? 90 : 150,
+        maximumUsagePercent: lowMemory ? 82 : 74,
+        stage: `before-refinement-${attempt + 1}`
+      });
+
+      logger?.warn(
+        {
+          requestId,
+          attempt: attempt + 1,
+          previousBytes: length,
+          targetBytes: options.targetBytes,
+          direction,
+          currentSettings: settings,
+          nextSettings
+        },
+        direction === "up"
+          ? "Kết quả còn thấp, tăng chất lượng để tiến gần dung lượng tối đa"
+          : "Kết quả vượt trần, giảm nhẹ cấu hình để xuống dưới dung lượng tối đa"
+      );
+
+      settings = nextSettings;
+      previousDirection = direction;
+    }
+
+    if (bestBytes !== null) {
+      await fsp.copyFile(bestPath, outputPath);
+      return {
+        outputBytes: bestBytes,
+        finalSettings: bestSettings,
+        reachedTarget: true,
+        closeToTarget: bestBytes >= lowerBound
+      };
+    }
+
     throw new AppError(
-      `Không thể đưa PDF xuống dưới ${(
-        targetBytes / BYTES_PER_MB
-      ).toFixed(2)} MB với cấu hình hiện tại. ` +
-        "Hãy giảm DPI, giảm chất lượng JPEG hoặc chọn thang xám.",
+      `Không thể đưa PDF xuống dưới ${(options.targetBytes / MB).toFixed(2)} MB ` +
+        "với giới hạn RAM hiện tại. Hãy giảm DPI, giảm JPEG hoặc chọn thang xám.",
       422,
       "TARGET_NOT_REACHED"
     );
+  } finally {
+    await removeSafe(bestPath);
   }
-
-  return {
-    outputBytes,
-    finalSettings
-  };
 }
 
 export async function compressPdfInProcess({
@@ -377,37 +241,19 @@ export async function compressPdfInProcess({
   ...rawOptions
 }) {
   const startedAt = performance.now();
-  const options =
-    validateCompressionOptions(rawOptions);
-
+  const options = validateCompressionOptions(rawOptions);
   let document;
-  let outputBytes;
 
   try {
-    const inputStat =
-      await fsp.stat(inputPath);
-
+    const inputStat = await fsp.stat(inputPath);
     const inputBytes = inputStat.size;
-
-    validateLowMemoryRequest({
-      inputBytes,
-      options
-    });
-
+    validateLowMemoryRequest({ inputBytes, options });
     throwIfAborted(signal);
 
-    /*
-     * File đã nhỏ hơn giới hạn người dùng nhập.
-     * Không nén lại để tránh giảm chất lượng.
-     */
-    if (
-      options.targetBytes >= inputBytes
-    ) {
-      await fsp.copyFile(
-        inputPath,
-        outputPath
-      );
+    await fsp.mkdir(path.dirname(outputPath), { recursive: true });
 
+    if (options.targetBytes >= inputBytes) {
+      await fsp.copyFile(inputPath, outputPath);
       return {
         inputBytes,
         outputBytes: inputBytes,
@@ -416,46 +262,23 @@ export async function compressPdfInProcess({
         dpi: null,
         jpegQuality: null,
         reachedTarget: true,
+        closeToTarget: true,
         skipped: true,
-        durationMs: Math.max(
-          0,
-          Math.round(
-            performance.now() - startedAt
-          )
-        )
+        durationMs: Math.max(0, Math.round(performance.now() - startedAt))
       };
     }
 
     assertMemoryHeadroom({
-      minimumFreeMb: 160,
-      maximumUsagePercent: 68,
+      minimumFreeMb: 150,
+      maximumUsagePercent: 70,
       stage: "before-open-mupdf"
     });
 
-    logger?.info(
-      {
-        requestId,
-        inputPath,
-        inputBytes,
-        targetBytes: options.targetBytes
-      },
-      "Mở trực tiếp file PDF bằng MuPDF"
-    );
-
-    document =
-      mupdf.PDFDocument.openDocument(
-        inputPath,
-        "application/pdf"
-      );
-
-    logMemory(
-      logger,
-      "RAM sau khi mở tài liệu MuPDF",
-      {
-        requestId,
-        stage: "mupdf-opened"
-      }
-    );
+    document = mupdf.PDFDocument.openDocument(inputPath, "application/pdf");
+    logMemory(logger, "RAM sau khi mở tài liệu MuPDF", {
+      requestId,
+      stage: "mupdf-opened"
+    });
 
     if (document.needsPassword()) {
       throw new AppError(
@@ -465,29 +288,10 @@ export async function compressPdfInProcess({
       );
     }
 
-    const pageCount =
-      document.countPages();
-
-    logger?.info(
-      {
-        requestId,
-        pageCount,
-        inputBytes
-      },
-      "Đã phân tích thông tin PDF"
-    );
-
-    if (
-      !Number.isInteger(pageCount) ||
-      pageCount <= 0
-    ) {
-      throw new AppError(
-        "PDF không có trang hợp lệ.",
-        400,
-        "INVALID_PAGE_COUNT"
-      );
+    const pageCount = document.countPages();
+    if (!Number.isInteger(pageCount) || pageCount <= 0) {
+      throw new AppError("PDF không có trang hợp lệ.", 400, "INVALID_PAGE_COUNT");
     }
-
     if (pageCount > maxPageCount) {
       throw new AppError(
         `PDF vượt quá giới hạn ${maxPageCount} trang.`,
@@ -496,208 +300,75 @@ export async function compressPdfInProcess({
       );
     }
 
-    const samplePages =
-      selectSamplePages(pageCount);
-
-    logger?.info(
-      {
-        requestId,
-        samplePages
-      },
-      "Bắt đầu thử cấu hình trên các trang mẫu"
-    );
-
-    const selected =
-      await chooseCompressionSettings(
-        document,
-        {
-          samplePages,
-          pageCount,
-          inputBytes,
-          options,
-          onProgress,
-          signal
-        }
-      );
-
-    logger?.info(
-      {
-        requestId,
-        selected
-      },
-      "Đã chọn cấu hình nén ban đầu"
-    );
-
-    logMemory(
-      logger,
-      "RAM sau khi chọn cấu hình nén",
-      {
-        requestId,
-        stage: "settings-selected"
-      }
-    );
-
-    const allPages = Array.from(
-      {
-        length: pageCount
-      },
-      (_, index) => index
-    );
-
-    let finalSettings = {
-      dpi: selected.dpi,
-      jpegQuality:
-        selected.jpegQuality,
-      colorMode: options.colorMode
-    };
-
-    logger?.info(
-      {
-        requestId,
-        finalSettings,
-        pageCount,
-        targetBytes: options.targetBytes
-      },
-      "Bắt đầu dựng toàn bộ PDF"
-    );
-
-    outputBytes =
-      await buildRasterizedPdf(
-        document,
-        allPages,
-        finalSettings,
-        {
-          onProgress,
-          signal
-        }
-      );
-
-    logger?.info(
-      {
-        requestId,
-        outputBytes: outputBytes.length,
-        targetBytes: options.targetBytes,
-        finalSettings
-      },
-      "Dựng toàn bộ PDF lần đầu hoàn tất"
-    );
-
-    logMemory(
-      logger,
-      "RAM sau khi dựng PDF lần đầu",
-      {
-        requestId,
-        stage: "full-build",
-        outputBytes: outputBytes.length
-      }
-    );
-
-    /*
-     * Tinh chỉnh để:
-     * - Không vượt dung lượng tối đa.
-     * - Không thấp hơn mục tiêu quá nhiều.
-     */
-    const refined =
-      await refinePdfToTarget({
-        document,
-        allPages,
-        initialBytes: outputBytes,
-        initialSettings: finalSettings,
-        options,
-        onProgress,
-        signal,
-        logger,
-        requestId
-      });
-
-    outputBytes = refined.outputBytes;
-    finalSettings =
-      refined.finalSettings;
-
-    throwIfAborted(signal);
-
-    assertMemoryHeadroom({
-      minimumFreeMb: 64,
-      maximumUsagePercent: 88,
-      stage: "write-output"
+    const samplePages = selectSamplePages(pageCount);
+    const selected = await chooseCompressionSettings(document, {
+      samplePages,
+      pageCount,
+      inputBytes,
+      options,
+      onProgress,
+      signal
     });
 
-    await fsp.writeFile(
-      outputPath,
-      outputBytes
-    );
-
-    const resultLength =
-      outputBytes.length;
-
-    outputBytes = null;
-    releaseOutputBytes();
-
     logger?.info(
-      {
-        requestId,
-        outputPath,
-        outputBytes: resultLength,
-        targetBytes: options.targetBytes,
-        finalSettings
-      },
-      "Đã ghi file PDF kết quả xuống ổ đĩa"
+      { requestId, selected, samplePages },
+      "Đã chọn cấu hình ban đầu từ trang mẫu"
     );
+
+    const allPages = Array.from({ length: pageCount }, (_, index) => index);
+    const built = await buildClosestUnderTarget({
+      document,
+      allPages,
+      initialSettings: {
+        dpi: selected.dpi,
+        jpegQuality: selected.jpegQuality,
+        colorMode: options.colorMode
+      },
+      inputBytes,
+      outputPath,
+      options,
+      onProgress,
+      signal,
+      logger,
+      requestId
+    });
 
     onProgress?.({
       stage: "completed",
       inputBytes,
-      outputBytes: resultLength,
+      outputBytes: built.outputBytes,
       targetBytes: options.targetBytes,
-      ...finalSettings
+      ...built.finalSettings
     });
 
     return {
       inputBytes,
-      outputBytes: resultLength,
+      outputBytes: built.outputBytes,
       targetBytes: options.targetBytes,
       pageCount,
-      dpi: finalSettings.dpi,
-      jpegQuality:
-        finalSettings.jpegQuality,
-      reachedTarget:
-        resultLength <=
-        options.targetBytes,
+      dpi: built.finalSettings.dpi,
+      jpegQuality: built.finalSettings.jpegQuality,
+      reachedTarget: built.reachedTarget,
+      closeToTarget: built.closeToTarget,
       skipped: false,
-      durationMs: Math.max(
-        0,
-        Math.round(
-          performance.now() - startedAt
-        )
-      )
+      durationMs: Math.max(0, Math.round(performance.now() - startedAt))
     };
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : String(error);
-
+    const message = error instanceof Error ? error.message : String(error);
     logger?.error(
       {
         requestId,
         error,
-        elapsedMs: Math.round(
-          performance.now() - startedAt
-        )
+        elapsedMs: Math.round(performance.now() - startedAt)
       },
       "Lỗi bên trong dịch vụ nén PDF"
     );
-
     logMemory(
       logger,
       "RAM khi dịch vụ nén phát sinh lỗi",
-      {
-        requestId,
-        stage: "service-error"
-      },
+      { requestId, stage: "service-error" },
       "error"
     );
-
     if (/password/i.test(message)) {
       throw new AppError(
         "PDF đang được bảo vệ bằng mật khẩu.",
@@ -705,22 +376,13 @@ export async function compressPdfInProcess({
         "PDF_PASSWORD_REQUIRED"
       );
     }
-
     throw error;
   } finally {
-    outputBytes = null;
-
     safeDestroy(document);
-
-    releaseOutputBytes();
-
-    logMemory(
-      logger,
-      "RAM sau khi đóng tài liệu MuPDF",
-      {
-        requestId,
-        stage: "mupdf-destroyed"
-      }
-    );
+    forceGc();
+    logMemory(logger, "RAM sau khi đóng tài liệu MuPDF", {
+      requestId,
+      stage: "mupdf-destroyed"
+    });
   }
 }
