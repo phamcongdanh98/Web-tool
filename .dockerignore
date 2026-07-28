@@ -7,9 +7,9 @@ npm-debug.log*
 .env.*
 !.env.example
 coverage
-tmp
-temp
-uploads
+/tmp/
+/temp/
+/uploads/
 *.zip
 .DS_Store
 .vscode

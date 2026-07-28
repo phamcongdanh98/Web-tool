@@ -3,7 +3,7 @@ node_modules/
 *.log
 .DS_Store
 coverage/
-tmp/
-temp/
-uploads/
+/tmp/
+/temp/
+/uploads/
 *.zip
