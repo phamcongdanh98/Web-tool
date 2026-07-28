@@ -28,3 +28,10 @@ services:
         value: 80
       - key: PROGRESS_LOG_EVERY_PAGES
         value: 5
+      - key: JOB_RETENTION_MS
+        value: 900000
+      - key: JOB_CLEANUP_INTERVAL_MS
+        value: 60000
+      - key: MAX_STORED_JOBS
+        value: 6
+

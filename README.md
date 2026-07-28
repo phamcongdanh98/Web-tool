@@ -294,3 +294,14 @@ MAX_QUEUE_SIZE=3
 NODE_OPTIONS=--max-old-space-size=192
 MEMORY_LOG_INTERVAL_MS=3000
 ```
+
+## Cơ chế tác vụ nền (V4)
+
+Từ V4, nén PDF không còn giữ một request HTTP mở đến khi hoàn tất. Luồng mới:
+
+1. `POST /api/pdf/compress/jobs` tải file lên và trả `jobId` ngay.
+2. Frontend gọi `GET /api/pdf/compress/jobs/:jobId` mỗi 2 giây để lấy tiến độ.
+3. Khi trạng thái là `completed`, frontend tải file từ `GET /api/pdf/compress/jobs/:jobId/download`.
+4. Kết quả được giữ theo `JOB_RETENTION_MS`, sau đó tự xóa.
+
+Cơ chế này sửa lỗi `ERR_STREAM_PREMATURE_CLOSE` và HTTP 502 khi Render đóng kết nối nén kéo dài nhiều phút.

@@ -26,6 +26,7 @@ const state = {
 
   progressTimer: null,
   toastTimer: null,
+  currentJobId: null,
 
   isCompressing: false
 };
@@ -1136,272 +1137,151 @@ async function readErrorMessage(
 
 
 async function compressPdf() {
-  if (
-    !state.file ||
-    state.isCompressing
-  ) {
-    return;
-  }
+  if (!state.file || state.isCompressing) return;
 
-  if (
-    getTargetBytes() <
-    200 * 1024
-  ) {
-    showToast(
-      "Dung lượng mục tiêu tối thiểu là 200 KB."
-    );
-
+  if (getTargetBytes() < 200 * 1024) {
+    showToast("Dung lượng mục tiêu tối thiểu là 200 KB.");
     return;
   }
 
   state.isCompressing = true;
-
+  state.currentJobId = null;
   resetResult();
-  startFakeProgress();
+  stopFakeProgress();
+  setProgress(2, "Đang tải PDF lên máy chủ...");
 
-  elements.compressButton
-    .disabled = true;
-
-  elements.removeFileButton
-    .disabled = true;
-
-  elements.downloadButton
-    .disabled = true;
+  elements.compressButton.disabled = true;
+  elements.removeFileButton.disabled = true;
+  elements.downloadButton.disabled = true;
 
   try {
-    const response =
-      await fetch(
-        "/api/compress",
-        {
-          method: "POST",
-          body:
-            createCompressionFormData()
-        }
-      );
+    const createResponse = await fetch("/api/pdf/compress/jobs", {
+      method: "POST",
+      body: createCompressionFormData()
+    });
 
-    if (!response.ok) {
-      throw new Error(
-        await readErrorMessage(
-          response
-        )
-      );
+    if (!createResponse.ok) {
+      throw new Error(await readErrorMessage(createResponse));
     }
 
-    const resultBlob =
-      await response.blob();
+    const created = await createResponse.json();
+    if (!created.jobId) throw new Error("Máy chủ không trả về mã tác vụ.");
 
-    if (
-      resultBlob.type !==
-        "application/pdf" &&
-      resultBlob.size <= 0
-    ) {
-      throw new Error(
-        "Máy chủ không trả về PDF hợp lệ."
-      );
-    }
+    state.currentJobId = created.jobId;
+    setProgress(3, "Đã tải lên, đang chờ xử lý...");
 
-    stopFakeProgress();
-
-    state.resultBlob =
-      resultBlob;
-
-    state.resultFilename =
-      getDownloadFilename();
-
-    releaseResultUrl();
-
-    state.resultObjectUrl =
-      URL.createObjectURL(
-        resultBlob
-      );
-
-    const originalSize =
-      Number(
-        response.headers.get(
-          "X-Original-Size"
-        )
-      ) ||
-      state.file.size;
-
-    const compressedSize =
-      Number(
-        response.headers.get(
-          "X-Compressed-Size"
-        )
-      ) ||
-      resultBlob.size;
-
-    const dpi =
-      response.headers.get(
-        "X-Compression-Dpi"
-      );
-
-    const quality =
-      response.headers.get(
-        "X-Compression-Quality"
-      );
-
-    const pageCount =
-      response.headers.get(
-        "X-Page-Count"
-      );
-
-    const reachedTarget =
-      response.headers.get(
-        "X-Compression-Reached-Target"
-      ) === "true";
-
-    const durationMs =
-      Number(
-        response.headers.get(
-          "X-Compression-Duration-Ms"
-        )
-      ) || 0;
-
-    const queueWaitMs =
-      Number(
-        response.headers.get(
-          "X-Queue-Wait-Ms"
-        )
-      ) || 0;
-
-    const reduction =
-      Math.max(
-        0,
-        (
-          1 -
-          compressedSize /
-          originalSize
-        ) * 100
-      );
-
-    elements.originalSize
-      .textContent =
-      formatBytes(
-        originalSize
-      );
-
-    elements.estimatedSize
-      .textContent =
-      formatBytes(
-        compressedSize
-      );
-
-    elements.resultOriginalSize
-      .textContent =
-      formatBytes(
-        originalSize
-      );
-
-    elements.resultCompressedSize
-      .textContent =
-      formatBytes(
-        compressedSize
-      );
-
-    elements.resultReduction
-      .textContent =
-      `${reduction.toFixed(1)}%`;
-
-    elements.resultDuration
-      .textContent =
-      formatDuration(durationMs);
-
-    renderPdfPreview(
-      elements.compressedPreview,
-      state.resultObjectUrl,
-      "Xem trước PDF đã nén"
-    );
-
-    elements.compressedPageInfo
-      .textContent =
-      pageCount
-        ? `Trang 1 / ${pageCount}`
-        : "Trang 1 / —";
-
-    setProgress(
-      100,
-      reachedTarget
-        ? "Nén hoàn tất"
-        : "Hoàn tất nhưng chưa đạt đúng mục tiêu"
-    );
-
-    elements.downloadButton
-      .disabled = false;
-
-    const resultMessage =
-      reachedTarget
-        ? (
-            `Đã nén còn ` +
-            `${formatBytes(
-              compressedSize
-            )} trong ` +
-            `${formatDuration(durationMs)}. ` +
-            `${dpi} DPI, JPEG ${quality}%.`
-          )
-        : (
-            `File mới là ` +
-            `${formatBytes(
-              compressedSize
-            )} sau ` +
-            `${formatDuration(durationMs)}, chưa đạt đúng mục tiêu.`
-          );
-
-    showToast(
-      queueWaitMs > 1000
-        ? `${resultMessage} Chờ hàng đợi ${formatDuration(queueWaitMs)}.`
-        : resultMessage
-    );
+    const job = await waitForCompressionJob(created.jobId);
+    await loadCompletedJobResult(job);
   } catch (error) {
-    stopFakeProgress();
+    setProgress(0, "Nén thất bại");
 
-    setProgress(
-      0,
-      "Nén thất bại"
-    );
-
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Không thể nén PDF.";
+    const message = error instanceof Error
+      ? error.message
+      : "Không thể nén PDF.";
 
     showToast(message);
-
     openModal(
       "Không thể nén PDF",
       `
         <p>${escapeHtml(message)}</p>
-
-        <p>
-          Hãy kiểm tra:
-        </p>
-
+        <p>Hãy kiểm tra:</p>
         <ul>
-          <li>
-            Máy chủ Node.js vẫn đang chạy.
-          </li>
-
-          <li>
-            File là PDF hợp lệ và không có mật khẩu.
-          </li>
-
-          <li>
-            Terminal không xuất hiện lỗi cài thư viện.
-          </li>
+          <li>File là PDF hợp lệ và không có mật khẩu.</li>
+          <li>Dung lượng mục tiêu không quá thấp.</li>
+          <li>Máy chủ còn đủ RAM để xử lý file.</li>
         </ul>
       `
     );
   } finally {
     state.isCompressing = false;
-
-    elements.compressButton
-      .disabled =
-      !state.file;
-
-    elements.removeFileButton
-      .disabled =
-      !state.file;
+    elements.compressButton.disabled = !state.file;
+    elements.removeFileButton.disabled = !state.file;
   }
+}
+
+async function waitForCompressionJob(jobId) {
+  const startedAt = Date.now();
+  const maximumWaitMs = 30 * 60 * 1000;
+
+  while (Date.now() - startedAt < maximumWaitMs) {
+    const response = await fetch(`/api/pdf/compress/jobs/${encodeURIComponent(jobId)}`, {
+      method: "GET",
+      cache: "no-store"
+    });
+
+    if (!response.ok) throw new Error(await readErrorMessage(response));
+
+    const payload = await response.json();
+    const job = payload.job;
+    if (!job) throw new Error("Không đọc được trạng thái tác vụ.");
+
+    setProgress(job.progress || 0, job.message || "Đang nén PDF...");
+
+    if (job.status === "completed") return job;
+    if (job.status === "failed" || job.status === "cancelled") {
+      throw new Error(job.error?.message || job.message || "Tác vụ nén thất bại.");
+    }
+
+    await delay(2000);
+  }
+
+  throw new Error("Tác vụ nén mất quá nhiều thời gian. Vui lòng thử lại.");
+}
+
+async function loadCompletedJobResult(job) {
+  setProgress(99, "Đang tải file kết quả...");
+
+  const response = await fetch(job.downloadUrl, {
+    method: "GET",
+    cache: "no-store"
+  });
+
+  if (!response.ok) throw new Error(await readErrorMessage(response));
+
+  const resultBlob = await response.blob();
+  if (resultBlob.size <= 0) throw new Error("Máy chủ không trả về PDF hợp lệ.");
+
+  state.resultBlob = resultBlob;
+  state.resultFilename = getDownloadFilename();
+  releaseResultUrl();
+  state.resultObjectUrl = URL.createObjectURL(resultBlob);
+
+  const result = job.result || {};
+  const originalSize = Number(job.inputBytes) || state.file.size;
+  const compressedSize = Number(job.outputBytes) || resultBlob.size;
+  const durationMs = Number(job.durationMs) || Number(result.durationMs) || 0;
+  const queueWaitMs = Number(job.queueWaitMs) || 0;
+  const reduction = Math.max(0, (1 - compressedSize / originalSize) * 100);
+
+  elements.originalSize.textContent = formatBytes(originalSize);
+  elements.estimatedSize.textContent = formatBytes(compressedSize);
+  elements.resultOriginalSize.textContent = formatBytes(originalSize);
+  elements.resultCompressedSize.textContent = formatBytes(compressedSize);
+  elements.resultReduction.textContent = `${reduction.toFixed(1)}%`;
+  elements.resultDuration.textContent = formatDuration(durationMs);
+
+  renderPdfPreview(elements.compressedPreview, state.resultObjectUrl, "Xem trước PDF đã nén");
+  elements.compressedPageInfo.textContent = result.pageCount
+    ? `Trang 1 / ${result.pageCount}`
+    : "Trang 1 / —";
+
+  setProgress(100, result.reachedTarget === false
+    ? "Hoàn tất nhưng chưa đạt đúng mục tiêu"
+    : "Nén hoàn tất");
+
+  elements.downloadButton.disabled = false;
+
+  const message = result.reachedTarget === false
+    ? `File mới là ${formatBytes(compressedSize)} sau ${formatDuration(durationMs)}, chưa đạt đúng mục tiêu.`
+    : `Đã nén còn ${formatBytes(compressedSize)} trong ${formatDuration(durationMs)}.`;
+
+  showToast(queueWaitMs > 1000
+    ? `${message} Chờ hàng đợi ${formatDuration(queueWaitMs)}.`
+    : message);
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 

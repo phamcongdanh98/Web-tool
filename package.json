@@ -1,6 +1,6 @@
 {
   "name": "web-tool-pdf",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "private": true,
   "description": "Bộ công cụ PDF triển khai bằng Node.js, Fastify, MuPDF.js, Docker và VPS",
   "type": "module",
