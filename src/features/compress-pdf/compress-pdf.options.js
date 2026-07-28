@@ -13,7 +13,7 @@ export const COMPRESSION_LIMITS = Object.freeze({
   MAX_CANDIDATE_COUNT: 6,
   LOW_MEMORY_LIMIT_MB: 768,
   LOW_MEMORY_MAX_DPI: 120,
-  LOW_MEMORY_MIN_TARGET_RATIO: 0.12
+  LOW_MEMORY_MIN_TARGET_RATIO: 0.08
 });
 
 function clampInteger(value, minimum, maximum, fallback) {
