@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="vi" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Sắp xếp, xoay, xóa, tách và gộp các trang PDF trực tuyến."
+    />
+    <title>Chỉnh sửa PDF — PDF Tiện Ích</title>
+    <script>
+      (() => {
+        const saved = localStorage.getItem("pdf-tool-theme");
+        const system = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.dataset.theme = ["light", "dark"].includes(saved) ? saved : system;
+      })();
+    </script>
+    <link rel="stylesheet" href="/pdf-editor.css" />
+  </head>
+  <body>
+    <div class="editor-shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="Về trang chủ">
+          <span class="brand__mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v5h5"></path><path d="M10 13h5M10 17h5"></path></svg>
+          </span>
+          <span>
+            <strong>PDF Tiện Ích</strong>
+            <small>Chỉnh sửa PDF</small>
+          </span>
+        </a>
+
+        <nav class="topbar__actions" aria-label="Điều hướng">
+          <a class="ghost-button" href="/">
+            <svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"></path></svg>
+            Trang chủ
+          </a>
+          <button class="icon-button" id="themeToggle" type="button" aria-label="Đổi giao diện">
+            <svg class="sun-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+          </button>
+        </nav>
+      </header>
+
+      <main>
+        <section class="hero">
+          <div>
+            <span class="eyebrow">CÔNG CỤ PDF</span>
+            <h1>Chỉnh sửa PDF</h1>
+            <p>Gộp tài liệu, kéo thả để sắp xếp, xoay hoặc xóa trang theo cách bạn muốn.</p>
+          </div>
+          <div class="privacy-note">
+            <svg viewBox="0 0 24 24"><path d="M12 22s8-3 8-10V5l-8-3-8 3v7c0 7 8 10 8 10Z"></path><path d="m9 12 2 2 4-5"></path></svg>
+            <span><strong>Riêng tư & an toàn</strong><small>File sẽ tự động được xóa sau khi xử lý</small></span>
+          </div>
+        </section>
+
+        <section class="workspace-card">
+          <div class="empty-state" id="emptyState">
+            <label class="drop-zone" id="dropZone" for="pdfInput">
+              <input id="pdfInput" type="file" accept=".pdf,application/pdf" multiple hidden />
+              <span class="drop-zone__art" aria-hidden="true">
+                <svg viewBox="0 0 64 64"><path d="M19 7h20l12 12v38H19z"></path><path d="M39 7v13h13"></path><path d="M8 24h23v27H8z"></path><path d="M14 36h11M19.5 30.5v11"></path></svg>
+              </span>
+              <strong>Thả file PDF vào đây</strong>
+              <span>hoặc chọn file từ thiết bị của bạn</span>
+              <span class="select-button">
+                <svg viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"></path><path d="M4 15v4h16v-4"></path></svg>
+                Chọn file PDF
+              </span>
+              <small>Hỗ trợ nhiều file PDF · Tối đa 100 MB mỗi file</small>
+            </label>
+
+            <div class="feature-row">
+              <article><span>↕</span><div><strong>Kéo để sắp xếp</strong><small>Đổi thứ tự trang trực quan</small></div></article>
+              <article><span>↻</span><div><strong>Xoay & xóa trang</strong><small>Chỉnh nhanh từng trang</small></div></article>
+              <article><span>⊞</span><div><strong>Gộp nhiều file</strong><small>Ghép tất cả thành một PDF</small></div></article>
+            </div>
+          </div>
+
+          <div class="editor" id="editor" hidden>
+            <header class="editor-toolbar">
+              <div class="file-summary">
+                <span class="pdf-badge">PDF</span>
+                <span><strong id="fileSummary">0 file PDF</strong><small id="pageSummary">0 trang</small></span>
+              </div>
+              <div class="toolbar-actions">
+                <label class="toolbar-button toolbar-button--add" for="addPdfInput">
+                  <input id="addPdfInput" type="file" accept=".pdf,application/pdf" multiple hidden />
+                  <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>
+                  Thêm PDF
+                </label>
+                <button class="toolbar-button" id="selectAllButton" type="button">Chọn tất cả</button>
+                <button class="toolbar-button" id="undoButton" type="button" disabled>
+                  <svg viewBox="0 0 24 24"><path d="M9 7 4 12l5 5"></path><path d="M5 12h8a6 6 0 0 1 6 6"></path></svg>
+                  Hoàn tác
+                </button>
+              </div>
+            </header>
+
+            <div class="selection-toolbar" id="selectionToolbar">
+              <span><strong id="selectedCount">0</strong> trang đang chọn</span>
+              <div>
+                <button type="button" data-action="rotate-left" title="Xoay trái">↶ <span>Xoay trái</span></button>
+                <button type="button" data-action="rotate-right" title="Xoay phải">↷ <span>Xoay phải</span></button>
+                <button type="button" data-action="duplicate" title="Nhân bản">▣ <span>Nhân bản</span></button>
+                <button class="danger" type="button" data-action="delete" title="Xóa">⌫ <span>Xóa</span></button>
+              </div>
+            </div>
+
+            <div class="pages-area">
+              <div class="pages-heading">
+                <div><h2>Sắp xếp trang</h2><p>Kéo và thả các trang để thay đổi thứ tự</p></div>
+                <span class="demo-pill">BẢN XEM TRƯỚC GIAO DIỆN</span>
+              </div>
+              <div class="page-grid" id="pageGrid" aria-live="polite"></div>
+            </div>
+
+            <footer class="editor-footer">
+              <div class="output-options">
+                <label>
+                  <span>Tên file đầu ra</span>
+                  <div class="filename-input"><input id="outputName" value="tai-lieu-da-chinh-sua" /><span>.pdf</span></div>
+                </label>
+                <label>
+                  <span>Chế độ xuất</span>
+                  <select id="outputMode">
+                    <option value="merge">Gộp thành một PDF</option>
+                    <option value="split">Tách trang đã chọn</option>
+                  </select>
+                </label>
+              </div>
+              <button class="primary-button" id="exportButton" type="button">
+                <svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5"></path><path d="M5 20h14"></path></svg>
+                Xuất PDF
+              </button>
+            </footer>
+          </div>
+        </section>
+      </main>
+
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    </div>
+    <script src="/pdf-editor.js"></script>
+  </body>
+</html>
