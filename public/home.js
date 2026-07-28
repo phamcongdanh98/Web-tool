@@ -763,6 +763,15 @@ function attachEvents() {
       );
     });
 
+  document
+    .querySelectorAll("[data-tool-url]")
+    .forEach((card) => {
+      card.addEventListener("click", (event) => {
+        if (event.target.closest("a, button, input, select")) return;
+        window.location.assign(card.dataset.toolUrl);
+      });
+    });
+
   elements.modalCloseButton.addEventListener(
     "click",
     closeModal

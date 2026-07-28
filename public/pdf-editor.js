@@ -39,20 +39,46 @@ function snapshot() {
   elements.undoButton.disabled = false;
 }
 
-function createPages(file, fileIndex) {
-  // Bản giao diện dùng số trang mô phỏng; backend sẽ thay bằng số trang PDF thật.
-  const count = Math.max(3, Math.min(8, Math.round(file.size / 350000) || 4));
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+async function detectPageCount(file) {
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const source = new TextDecoder("latin1").decode(bytes);
+    const pageObjects = source.match(/\/Type\s*\/Page\b/g)?.length || 0;
+    if (pageObjects > 0) return pageObjects;
+
+    const counts = [...source.matchAll(/\/Count\s+(\d+)/g)]
+      .map((match) => Number(match[1]))
+      .filter((value) => Number.isInteger(value) && value > 0 && value <= 5000);
+    if (counts.length) return Math.max(...counts);
+  } catch {
+    // Nếu cấu trúc PDF dùng object stream, vẫn hiển thị được ít nhất trang đầu.
+  }
+  return 1;
+}
+
+async function createPages(fileRecord, fileIndex) {
+  const count = await detectPageCount(fileRecord.file);
   return Array.from({ length: count }, (_, pageIndex) => ({
     id: crypto.randomUUID(),
-    source: file.name,
+    source: fileRecord.file.name,
     sourceIndex: fileIndex,
     sourcePage: pageIndex + 1,
+    previewUrl: `${fileRecord.url}#page=${pageIndex + 1}&toolbar=0&navpanes=0&scrollbar=0&view=FitH`,
     rotation: 0,
     selected: false
   }));
 }
 
-function acceptFiles(fileList) {
+async function acceptFiles(fileList) {
   const files = Array.from(fileList || []).filter(
     (file) => file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")
   );
@@ -61,31 +87,31 @@ function acceptFiles(fileList) {
     return;
   }
   snapshot();
-  files.forEach((file) => {
+  for (const file of files) {
     const fileIndex = state.files.length;
-    state.files.push(file);
-    state.pages.push(...createPages(file, fileIndex));
-  });
+    const fileRecord = { file, url: URL.createObjectURL(file) };
+    state.files.push(fileRecord);
+    state.pages.push(...await createPages(fileRecord, fileIndex));
+  }
   elements.pdfInput.value = "";
   elements.addPdfInput.value = "";
   render();
 }
 
 function pageTemplate(page, index) {
-  const lines = Array.from({ length: 5 }, (_, line) =>
-    `<div class="page-content__line${line === 4 ? " short" : ""}"></div>`
-  ).join("");
   return `
     <article class="page-card${page.selected ? " is-selected" : ""}" draggable="true" data-id="${page.id}">
       <button class="page-check" type="button" aria-label="Chọn trang ${index + 1}">✓</button>
       <div class="page-paper">
         <div class="page-content" style="--rotation:${page.rotation}deg">
-          <div class="page-content__title"></div>
-          ${lines}
-          <div class="page-content__image">${index % 3 === 0 ? "▦" : index % 3 === 1 ? "◫" : "▤"}</div>
-          ${lines}
+          <embed
+            class="page-preview"
+            src="${page.previewUrl}"
+            type="application/pdf"
+            title="Xem trước ${escapeHtml(page.source)}, trang ${page.sourcePage}"
+          />
         </div>
-        <span class="page-source" title="${page.source}">${page.source}</span>
+        <span class="page-source" title="${escapeHtml(page.source)}">${escapeHtml(page.source)}</span>
       </div>
       <div class="page-label"><strong>Trang ${index + 1}</strong><span>· gốc ${page.sourcePage}</span></div>
     </article>
@@ -201,6 +227,10 @@ elements.selectionToolbar.addEventListener("click", (event) => {
 
 elements.exportButton.addEventListener("click", () => {
   showToast("Đây là bản duyệt giao diện. Chức năng xuất PDF sẽ được nối ở bước tiếp theo.");
+});
+
+window.addEventListener("beforeunload", () => {
+  state.files.forEach((record) => URL.revokeObjectURL(record.url));
 });
 
 render();

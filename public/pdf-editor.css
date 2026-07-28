@@ -110,7 +110,8 @@ main { width: min(1320px, calc(100% - 40px)); margin: 0 auto; padding: 38px 0 64
 .page-card.is-selected .page-paper { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), 0 12px 25px rgba(99,91,255,.15); }
 .page-paper { aspect-ratio: 0.72; padding: 13px; position: relative; overflow: hidden; background: #fff; border: 1px solid #dfe2e9; border-radius: 8px; box-shadow: 0 8px 18px rgba(40,47,75,.08); transition: .18s ease; }
 .page-card:hover .page-paper { transform: translateY(-3px); box-shadow: 0 12px 25px rgba(40,47,75,.13); }
-.page-content { height: 100%; color: #7a8190; transform: rotate(var(--rotation)); transition: transform .2s ease; }
+.page-content { width: 100%; height: 100%; color: #7a8190; transform: rotate(var(--rotation)); transition: transform .2s ease; transform-origin: center; }
+.page-preview { width: 100%; height: 100%; display: block; border: 0; background: #fff; pointer-events: none; }
 .page-content__title { width: 72%; height: 7px; margin: 8px 0 13px; background: #4f5a70; border-radius: 3px; }
 .page-content__line { height: 3px; margin: 6px 0; background: #d8dce5; border-radius: 2px; }
 .page-content__line.short { width: 68%; }
