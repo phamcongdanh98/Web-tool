@@ -3,7 +3,14 @@
 import { fork } from "node:child_process";
 import { AppError } from "../../core/errors/app-error.js";
 
-export function compressPdf({ logger, onProgress, signal, requestId, ...payload }) {
+export function compressPdf({
+  logger,
+  onProgress,
+  signal,
+  requestId,
+  timeoutMs = 30 * 60 * 1000,
+  ...payload
+}) {
   return new Promise((resolve, reject) => {
     const worker = fork(new URL("./compression-worker.js", import.meta.url), [], {
       stdio: ["ignore", "inherit", "inherit", "ipc"],
@@ -11,22 +18,54 @@ export function compressPdf({ logger, onProgress, signal, requestId, ...payload 
       execArgv: ["--expose-gc"]
     });
     let settled = false;
+    let forceKillTimer = null;
 
     const finish = (callback, value) => {
       if (settled) return;
       settled = true;
+      clearTimeout(timeout);
       signal?.removeEventListener("abort", abort);
       callback(value);
     };
 
-    const abort = () => {
+    const stopWorker = () => {
+      if (worker.exitCode !== null || worker.signalCode !== null) return;
       worker.kill("SIGTERM");
+      forceKillTimer = setTimeout(() => worker.kill("SIGKILL"), 5_000);
+      forceKillTimer.unref?.();
+    };
+
+    const abort = () => {
+      stopWorker();
       finish(reject, new AppError("Tác vụ đã bị hủy.", 499, "JOB_ABORTED"));
     };
+
+    const timeout = setTimeout(() => {
+      stopWorker();
+      finish(reject, new AppError(
+        "Tác vụ nén vượt quá thời gian xử lý cho phép.",
+        504,
+        "WORKER_TIMEOUT"
+      ));
+    }, Math.max(1_000, Number(timeoutMs) || 30 * 60 * 1000));
+    timeout.unref?.();
+
     signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) {
+      abort();
+      return;
+    }
 
     worker.on("message", (message) => {
-      if (message?.type === "progress") onProgress?.(message.progress);
+      if (settled) return;
+      if (message?.type === "progress") {
+        try {
+          onProgress?.(message.progress);
+        } catch (error) {
+          stopWorker();
+          finish(reject, error);
+        }
+      }
       if (message?.type === "log") {
         const method = typeof logger?.[message.level] === "function" ? message.level : "info";
         logger?.[method]?.({ requestId, workerPid: worker.pid, ...message.data }, message.message);

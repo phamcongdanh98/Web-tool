@@ -7,6 +7,8 @@ const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"]);
 
 export class JobStore {
   #jobs = new Map();
+  #reservations = 0;
+  #capacityLock = Promise.resolve();
   #timer = null;
 
   constructor({ retentionMs = 30 * 60 * 1000, cleanupIntervalMs = 60_000, maxJobs = 10, logger } = {}) {
@@ -19,16 +21,43 @@ export class JobStore {
   }
 
   async ensureCapacity() {
-    if (this.#jobs.size < this.maxJobs) return;
+    if (this.#jobs.size + this.#reservations < this.maxJobs) return;
     const removable = [...this.#jobs.values()]
       .filter((job) => TERMINAL_STATUSES.has(job.status))
       .sort((a, b) => a.updatedAt - b.updatedAt);
-    while (this.#jobs.size >= this.maxJobs && removable.length > 0) {
+    while (
+      this.#jobs.size + this.#reservations >= this.maxJobs &&
+      removable.length > 0
+    ) {
       await this.remove(removable.shift().id, { abort: false });
     }
-    if (this.#jobs.size >= this.maxJobs) {
+    if (this.#jobs.size + this.#reservations >= this.maxJobs) {
       throw new AppError("Máy chủ đang lưu quá nhiều tác vụ. Vui lòng thử lại sau.", 503, "JOB_STORE_FULL");
     }
+  }
+
+  async reserveCapacity() {
+    let unlock;
+    const previousLock = this.#capacityLock;
+    this.#capacityLock = new Promise((resolve) => {
+      unlock = resolve;
+    });
+
+    await previousLock;
+    try {
+      await this.ensureCapacity();
+      this.#reservations += 1;
+    } finally {
+      unlock();
+    }
+
+    let released = false;
+
+    return () => {
+      if (released) return;
+      released = true;
+      this.#reservations = Math.max(0, this.#reservations - 1);
+    };
   }
 
   create({ directory, inputPath, outputPath, originalFilename, inputBytes, options, cleanup }) {
@@ -42,7 +71,7 @@ export class JobStore {
       message: "Đang chờ xử lý",
       createdAt: now,
       updatedAt: now,
-      expiresAt: now + this.retentionMs,
+      expiresAt: null,
       startedAt: null,
       completedAt: null,
       queueWaitMs: 0,
@@ -77,7 +106,9 @@ export class JobStore {
   update(id, patch) {
     const job = this.require(id);
     Object.assign(job, patch, { updatedAt: Date.now() });
-    if (TERMINAL_STATUSES.has(job.status)) job.expiresAt = Date.now() + this.retentionMs;
+    job.expiresAt = TERMINAL_STATUSES.has(job.status)
+      ? Date.now() + this.retentionMs
+      : null;
     return job;
   }
 
@@ -145,7 +176,9 @@ export class JobStore {
         message: job.message,
         createdAt: new Date(job.createdAt).toISOString(),
         updatedAt: new Date(job.updatedAt).toISOString(),
-        expiresAt: new Date(job.expiresAt).toISOString(),
+        expiresAt: Number.isFinite(job.expiresAt)
+          ? new Date(job.expiresAt).toISOString()
+          : null,
         queueWaitMs: job.queueWaitMs,
         durationMs: job.durationMs,
         inputBytes: job.inputBytes,
@@ -168,7 +201,12 @@ export class JobStore {
 
   async cleanupExpired() {
     const now = Date.now();
-    const expired = [...this.#jobs.values()].filter((job) => job.expiresAt <= now);
+    const expired = [...this.#jobs.values()].filter(
+      (job) =>
+        TERMINAL_STATUSES.has(job.status) &&
+        Number.isFinite(job.expiresAt) &&
+        job.expiresAt <= now
+    );
     for (const job of expired) {
       try {
         await this.remove(job.id);
@@ -192,7 +230,8 @@ export class JobStore {
       queued: values.filter((job) => job.status === "queued").length,
       processing: values.filter((job) => job.status === "processing").length,
       completed: values.filter((job) => job.status === "completed").length,
-      failed: values.filter((job) => job.status === "failed").length
+      failed: values.filter((job) => job.status === "failed").length,
+      reservations: this.#reservations
     };
   }
 }

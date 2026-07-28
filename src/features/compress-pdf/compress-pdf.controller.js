@@ -13,7 +13,16 @@ import { compressPdf } from "./compress-pdf.worker-client.js";
 
 export function createCompressionJobController({ limiter, jobStore }) {
   return async function createCompressionJob(request, reply) {
-    const temporaryDirectory = await createTempDirectory("web-tool-pdf-job-");
+    // Từ chối sớm trước khi nhận và ghi toàn bộ file lên ổ đĩa.
+    const releaseCapacity = await jobStore.reserveCapacity();
+
+    let temporaryDirectory;
+    try {
+      temporaryDirectory = await createTempDirectory("web-tool-pdf-job-");
+    } catch (error) {
+      releaseCapacity();
+      throw error;
+    }
     const cleanup = createCleanup(temporaryDirectory, request.log);
     const inputPath = path.join(temporaryDirectory, "input.pdf");
     const outputPath = path.join(temporaryDirectory, "output.pdf");
@@ -52,8 +61,6 @@ export function createCompressionJobController({ limiter, jobStore }) {
         jpegQuality: Number(getFieldValue(fields, "jpegQuality", 75))
       };
 
-      await jobStore.ensureCapacity();
-
       job = jobStore.create({
         directory: temporaryDirectory,
         inputPath,
@@ -63,6 +70,7 @@ export function createCompressionJobController({ limiter, jobStore }) {
         options,
         cleanup
       });
+      releaseCapacity();
 
       request.log.info({
         jobId: job.id,
@@ -78,9 +86,10 @@ export function createCompressionJobController({ limiter, jobStore }) {
         jobId: job.id,
         statusUrl: `/api/pdf/compress/jobs/${job.id}`,
         downloadUrl: `/api/pdf/compress/jobs/${job.id}/download`,
-        expiresAt: new Date(job.expiresAt).toISOString()
+        expiresAt: null
       });
     } catch (error) {
+      releaseCapacity();
       if (!job) await cleanup();
       throw error;
     }
@@ -160,7 +169,9 @@ function startCompressionInBackground({ job, limiter, jobStore, logger }) {
       signal: job.abortController.signal,
       logger,
       requestId: job.id,
+      timeoutMs: env.WORKER_TIMEOUT_MS,
       onProgress(progress) {
+        if (!jobStore.get(job.id)) return;
         jobStore.markProgress(job.id, progress);
         const current = Number(progress.currentPage || 0);
         const total = Number(progress.totalPages || 0);
@@ -169,6 +180,7 @@ function startCompressionInBackground({ job, limiter, jobStore, logger }) {
       }
     });
 
+    if (!jobStore.get(job.id)) return;
     jobStore.markCompleted(job.id, result);
     logger.info({ jobId: job.id, result }, "Tác vụ nén PDF nền hoàn tất");
     logMemory(logger, "RAM sau khi nén PDF nền", { jobId: job.id, stage: "background-completed" });
