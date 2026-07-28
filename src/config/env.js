@@ -21,5 +21,8 @@ export const env = Object.freeze({
   MAX_PDF_PAGES: readPositiveInteger("MAX_PDF_PAGES", 500),
   MAX_CONCURRENT_JOBS: readPositiveInteger("MAX_CONCURRENT_JOBS", 1),
   MAX_QUEUE_SIZE: readNonNegativeInteger("MAX_QUEUE_SIZE", 10),
-  REQUEST_TIMEOUT_MS: readPositiveInteger("REQUEST_TIMEOUT_MS", 30 * 60 * 1000)
+  REQUEST_TIMEOUT_MS: readPositiveInteger("REQUEST_TIMEOUT_MS", 30 * 60 * 1000),
+  MEMORY_LOG_INTERVAL_MS: readNonNegativeInteger("MEMORY_LOG_INTERVAL_MS", 15_000),
+  MEMORY_WARNING_PERCENT: readPositiveInteger("MEMORY_WARNING_PERCENT", 85),
+  PROGRESS_LOG_EVERY_PAGES: readPositiveInteger("PROGRESS_LOG_EVERY_PAGES", 10)
 });

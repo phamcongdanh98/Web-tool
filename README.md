@@ -247,3 +247,26 @@ Engine hiện raster hóa trang thành JPEG. Phù hợp với PDF scan và nén 
 - Nội dung vector.
 
 Nên bổ sung engine giữ text/vector trước khi sử dụng như một dịch vụ PDF hoàn chỉnh.
+
+
+## Chẩn đoán lỗi và theo dõi RAM
+
+Bản này ghi log bộ nhớ định kỳ và theo từng giai đoạn nén. Các trường quan trọng:
+
+- `rssMb`: tổng RAM tiến trình Node.js đang giữ.
+- `heapUsedMb`: heap JavaScript đang sử dụng.
+- `externalMb`: bộ nhớ ngoài heap, gồm Buffer và một phần thư viện native/WASM.
+- `arrayBuffersMb`: bộ nhớ ArrayBuffer.
+- `cgroupUsedMb`: RAM toàn container đang sử dụng trên Docker/Render.
+- `cgroupLimitMb`: giới hạn RAM container nếu nền tảng cung cấp.
+- `cgroupUsagePercent`: tỷ lệ RAM container đã sử dụng.
+
+Biến môi trường:
+
+```env
+MEMORY_LOG_INTERVAL_MS=10000
+MEMORY_WARNING_PERCENT=80
+PROGRESS_LOG_EVERY_PAGES=5
+```
+
+Nếu Render dừng container bằng SIGKILL do hết RAM, Node.js không thể ghi log sau cùng. Hãy xem dòng `Cảnh báo RAM container đang cao` hoặc `Theo dõi RAM định kỳ` ngay trước lúc server khởi động lại.

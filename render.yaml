@@ -11,7 +11,7 @@ services:
       - key: HOST
         value: 0.0.0.0
       - key: MAX_UPLOAD_MB
-        value: 20
+        value: 50
       - key: MAX_PDF_PAGES
         value: 200
       - key: MAX_CONCURRENT_JOBS
@@ -22,3 +22,9 @@ services:
         value: 600000
       - key: NODE_OPTIONS
         value: --max-old-space-size=384
+      - key: MEMORY_LOG_INTERVAL_MS
+        value: 10000
+      - key: MEMORY_WARNING_PERCENT
+        value: 80
+      - key: PROGRESS_LOG_EVERY_PAGES
+        value: 5
