@@ -49,7 +49,7 @@ svg { width: 1.25rem; fill: none; stroke: currentColor; stroke-width: 1.8; strok
 .ghost-button svg { width: 16px; }
 .icon-button { width: 40px; }
 
-main { width: min(1320px, calc(100% - 40px)); margin: 0 auto; padding: 38px 0 64px; }
+main { width: min(1840px, calc(100% - 32px)); margin: 0 auto; padding: 38px 0 64px; }
 .hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 30px; margin-bottom: 25px; }
 .eyebrow { color: var(--accent); font-size: 11px; letter-spacing: .14em; font-weight: 800; }
 .hero h1 { margin: 8px 0 8px; font-size: clamp(29px, 3vw, 42px); letter-spacing: -.035em; }
@@ -104,7 +104,7 @@ main { width: min(1320px, calc(100% - 40px)); margin: 0 auto; padding: 38px 0 64
 .pages-heading p { margin: 0; color: var(--muted); font-size: 11px; }
 .demo-pill { padding: 6px 9px; color: #966b00; background: #fff4c7; border-radius: 7px; font-size: 9px; font-weight: 800; letter-spacing: .06em; }
 [data-theme="dark"] .demo-pill { color: #ffd96e; background: #4d4021; }
-.page-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 18px; }
+.page-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); gap: 20px; }
 .page-card { min-width: 0; cursor: grab; position: relative; }
 .page-card.is-dragging { opacity: .38; }
 .page-card.is-selected .page-paper { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), 0 12px 25px rgba(99,91,255,.15); }
@@ -138,7 +138,7 @@ main { width: min(1320px, calc(100% - 40px)); margin: 0 auto; padding: 38px 0 64
 @media (max-width: 760px) {
   .topbar { height: 64px; padding: 0 15px; }
   .brand small, .ghost-button { display: none; }
-  main { width: min(100% - 24px, 1320px); padding-top: 24px; }
+  main { width: calc(100% - 24px); padding-top: 24px; }
   .hero { align-items: flex-start; }
   .privacy-note { display: none; }
   .empty-state { padding: 14px; }
