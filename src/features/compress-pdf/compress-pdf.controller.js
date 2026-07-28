@@ -23,7 +23,6 @@ export function createCompressPdfController({ limiter }) {
 
     request.raw.once("aborted", abort);
     reply.raw.once("finish", cleanup);
-    reply.raw.once("close", cleanup);
 
     const inputPath = path.join(temporaryDirectory, "input.pdf");
     const outputPath = path.join(temporaryDirectory, "output.pdf");
