@@ -10,11 +10,16 @@ const elements = {
   pageGrid: document.querySelector("#pageGrid"),
   fileSummary: document.querySelector("#fileSummary"),
   pageSummary: document.querySelector("#pageSummary"),
+  sidebarFileName: document.querySelector("#sidebarFileName"),
+  sidebarFileMeta: document.querySelector("#sidebarFileMeta"),
+  sidebarPageCount: document.querySelector("#sidebarPageCount"),
+  fileSizeSummary: document.querySelector("#fileSizeSummary"),
   selectedCount: document.querySelector("#selectedCount"),
   selectAllButton: document.querySelector("#selectAllButton"),
   undoButton: document.querySelector("#undoButton"),
   selectionToolbar: document.querySelector("#selectionToolbar"),
   exportButton: document.querySelector("#exportButton"),
+  topExportButton: document.querySelector("#topExportButton"),
   toast: document.querySelector("#toast")
 };
 
@@ -118,6 +123,39 @@ function pageTemplate(page, index) {
   `;
 }
 
+function formatBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "—";
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function updateSelectionUi() {
+  const selected = state.pages.filter((page) => page.selected).length;
+  elements.selectedCount.textContent = selected;
+  elements.selectionToolbar.classList.toggle("has-selection", selected > 0);
+  elements.selectAllButton.textContent =
+    selected === state.pages.length ? "Bỏ chọn" : "Chọn tất cả";
+
+  elements.pageGrid.querySelectorAll(".page-card").forEach((card) => {
+    const page = state.pages.find((item) => item.id === card.dataset.id);
+    const isSelected = Boolean(page?.selected);
+    card.classList.toggle("is-selected", isSelected);
+    card.querySelector(".page-check")?.setAttribute("aria-pressed", String(isSelected));
+  });
+}
+
+function updateDocumentUi() {
+  const totalBytes = state.files.reduce((sum, record) => sum + record.file.size, 0);
+  const firstName = state.files[0]?.file.name || "PDF";
+  elements.fileSummary.textContent = `${state.files.length} file PDF`;
+  elements.pageSummary.textContent = `${state.pages.length} trang`;
+  elements.sidebarFileName.textContent =
+    state.files.length === 1 ? firstName : `${state.files.length} file PDF`;
+  elements.sidebarFileMeta.textContent = `${state.pages.length} trang · ${formatBytes(totalBytes)}`;
+  elements.sidebarPageCount.textContent = `${state.pages.length} trang`;
+  elements.fileSizeSummary.textContent = formatBytes(totalBytes);
+}
+
 function render() {
   const hasPages = state.pages.length > 0;
   elements.emptyState.hidden = hasPages;
@@ -125,12 +163,8 @@ function render() {
   if (!hasPages) return;
 
   elements.pageGrid.innerHTML = state.pages.map(pageTemplate).join("");
-  const selected = state.pages.filter((page) => page.selected).length;
-  elements.fileSummary.textContent = `${state.files.length} file PDF`;
-  elements.pageSummary.textContent = `${state.pages.length} trang`;
-  elements.selectedCount.textContent = selected;
-  elements.selectionToolbar.classList.toggle("has-selection", selected > 0);
-  elements.selectAllButton.textContent = selected === state.pages.length ? "Bỏ chọn" : "Chọn tất cả";
+  updateDocumentUi();
+  updateSelectionUi();
 }
 
 function updateSelected(action) {
@@ -147,6 +181,14 @@ function updateSelected(action) {
     state.pages.push(...copies);
   }
   if (action === "delete") state.pages = state.pages.filter((page) => !page.selected);
+  if (action === "rotate-left" || action === "rotate-right") {
+    selected.forEach((page) => {
+      const content = elements.pageGrid
+        .querySelector(`[data-id="${page.id}"] .page-content`);
+      content?.style.setProperty("--rotation", `${page.rotation}deg`);
+    });
+    return;
+  }
   render();
 }
 
@@ -180,7 +222,7 @@ elements.pageGrid.addEventListener("click", (event) => {
   const page = state.pages.find((item) => item.id === card.dataset.id);
   if (!page) return;
   page.selected = !page.selected;
-  render();
+  updateSelectionUi();
 });
 
 elements.pageGrid.addEventListener("dragstart", (event) => {
@@ -203,13 +245,15 @@ elements.pageGrid.addEventListener("drop", (event) => {
 });
 elements.pageGrid.addEventListener("dragend", () => {
   state.draggedId = null;
-  render();
+  elements.pageGrid
+    .querySelectorAll(".is-dragging")
+    .forEach((card) => card.classList.remove("is-dragging"));
 });
 
 elements.selectAllButton.addEventListener("click", () => {
   const shouldSelect = !state.pages.every((page) => page.selected);
   state.pages.forEach((page) => { page.selected = shouldSelect; });
-  render();
+  updateSelectionUi();
 });
 
 elements.undoButton.addEventListener("click", () => {
@@ -225,9 +269,19 @@ elements.selectionToolbar.addEventListener("click", (event) => {
   if (action) updateSelected(action);
 });
 
-elements.exportButton.addEventListener("click", () => {
-  showToast("Đây là bản duyệt giao diện. Chức năng xuất PDF sẽ được nối ở bước tiếp theo.");
+document.querySelector(".editor-sidebar").addEventListener("click", (event) => {
+  const action = event.target.closest("[data-action]")?.dataset.action;
+  if (action) updateSelected(action);
+  const demoTool = event.target.closest("[data-demo-tool]")?.dataset.demoTool;
+  if (demoTool) showToast(`${demoTool} sẽ được nối ở bước xử lý backend.`);
 });
+
+function showExportNotice() {
+  showToast("Đây là bản duyệt giao diện. Chức năng xuất PDF sẽ được nối ở bước tiếp theo.");
+}
+
+elements.exportButton.addEventListener("click", showExportNotice);
+elements.topExportButton.addEventListener("click", showExportNotice);
 
 window.addEventListener("beforeunload", () => {
   state.files.forEach((record) => URL.revokeObjectURL(record.url));

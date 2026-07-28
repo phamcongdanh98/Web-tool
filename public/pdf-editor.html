@@ -78,62 +78,99 @@
           </div>
 
           <div class="editor" id="editor" hidden>
-            <header class="editor-toolbar">
-              <div class="file-summary">
-                <span class="pdf-badge">PDF</span>
-                <span><strong id="fileSummary">0 file PDF</strong><small id="pageSummary">0 trang</small></span>
-              </div>
-              <div class="toolbar-actions">
-                <label class="toolbar-button toolbar-button--add" for="addPdfInput">
-                  <input id="addPdfInput" type="file" accept=".pdf,application/pdf" multiple hidden />
-                  <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>
-                  Thêm PDF
-                </label>
-                <button class="toolbar-button" id="selectAllButton" type="button">Chọn tất cả</button>
-                <button class="toolbar-button" id="undoButton" type="button" disabled>
-                  <svg viewBox="0 0 24 24"><path d="M9 7 4 12l5 5"></path><path d="M5 12h8a6 6 0 0 1 6 6"></path></svg>
-                  Hoàn tác
-                </button>
-              </div>
-            </header>
+            <div class="editor-layout">
+              <aside class="editor-sidebar">
+                <div class="sidebar-file">
+                  <span class="pdf-badge">PDF</span>
+                  <span><strong id="sidebarFileName">1 file PDF</strong><small id="sidebarFileMeta">0 trang</small></span>
+                </div>
 
-            <div class="selection-toolbar" id="selectionToolbar">
-              <span><strong id="selectedCount">0</strong> trang đang chọn</span>
-              <div>
-                <button type="button" data-action="rotate-left" title="Xoay trái">↶ <span>Xoay trái</span></button>
-                <button type="button" data-action="rotate-right" title="Xoay phải">↷ <span>Xoay phải</span></button>
-                <button type="button" data-action="duplicate" title="Nhân bản">▣ <span>Nhân bản</span></button>
-                <button class="danger" type="button" data-action="delete" title="Xóa">⌫ <span>Xóa</span></button>
+                <section class="sidebar-section">
+                  <h2>Thông tin</h2>
+                  <dl class="document-info">
+                    <div><dt>▱ Kích thước</dt><dd id="fileSizeSummary">—</dd></div>
+                    <div><dt>▦ Tổng số trang</dt><dd id="sidebarPageCount">0 trang</dd></div>
+                    <div><dt>◷ Trạng thái</dt><dd>Sẵn sàng</dd></div>
+                  </dl>
+                </section>
+
+                <section class="sidebar-section">
+                  <h2>Công cụ nhanh</h2>
+                  <div class="quick-tools">
+                    <button type="button" data-demo-tool="Tách PDF"><span>⌘</span>Tách PDF</button>
+                    <label for="addPdfInput"><span>⊞</span>Gộp thêm PDF</label>
+                    <button type="button" data-demo-tool="Nén PDF"><span>▣</span>Nén PDF</button>
+                    <button type="button" data-action="rotate-right"><span>↻</span>Xoay trang đã chọn</button>
+                    <button class="danger" type="button" data-action="delete"><span>⌫</span>Xóa trang đã chọn</button>
+                  </div>
+                </section>
+
+                <section class="sidebar-section sidebar-tip">
+                  <h2>Mẹo thao tác</h2>
+                  <p>Giữ và kéo một thẻ trang sang vị trí mới để sắp xếp tài liệu.</p>
+                </section>
+              </aside>
+
+              <div class="editor-main">
+                <header class="editor-toolbar">
+                  <div class="file-summary">
+                    <span class="pdf-badge">PDF</span>
+                    <span><strong id="fileSummary">0 file PDF</strong><small id="pageSummary">0 trang</small></span>
+                  </div>
+                  <div class="toolbar-actions">
+                    <label class="toolbar-button toolbar-button--add" for="addPdfInput">
+                      <input id="addPdfInput" type="file" accept=".pdf,application/pdf" multiple hidden />
+                      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>
+                      Thêm PDF
+                    </label>
+                    <button class="toolbar-button" id="selectAllButton" type="button">Chọn tất cả</button>
+                    <button class="toolbar-button" id="undoButton" type="button" disabled>
+                      <svg viewBox="0 0 24 24"><path d="M9 7 4 12l5 5"></path><path d="M5 12h8a6 6 0 0 1 6 6"></path></svg>
+                      Hoàn tác
+                    </button>
+                    <button class="primary-button primary-button--top" id="topExportButton" type="button">↓ Lưu & Xuất PDF</button>
+                  </div>
+                </header>
+
+                <div class="selection-toolbar" id="selectionToolbar">
+                  <span>✓ <strong id="selectedCount">0</strong> trang đã chọn</span>
+                  <div>
+                    <button type="button" data-action="rotate-left" title="Xoay trái">↶ <span>Xoay trái</span></button>
+                    <button type="button" data-action="rotate-right" title="Xoay phải">↷ <span>Xoay phải</span></button>
+                    <button type="button" data-action="duplicate" title="Nhân bản">▣ <span>Nhân bản</span></button>
+                    <button class="danger" type="button" data-action="delete" title="Xóa">⌫ <span>Xóa</span></button>
+                  </div>
+                </div>
+
+                <div class="pages-area">
+                  <div class="pages-heading">
+                    <div><h2>Sắp xếp trang</h2><p>Kéo và thả các trang để thay đổi thứ tự</p></div>
+                    <span class="demo-pill">BẢN XEM TRƯỚC GIAO DIỆN</span>
+                  </div>
+                  <div class="page-grid" id="pageGrid" aria-live="polite"></div>
+                </div>
+
+                <footer class="editor-footer">
+                  <div class="output-options">
+                    <label>
+                      <span>Tên file đầu ra</span>
+                      <div class="filename-input"><input id="outputName" value="tai-lieu-da-chinh-sua" /><span>.pdf</span></div>
+                    </label>
+                    <label>
+                      <span>Chế độ xuất</span>
+                      <select id="outputMode">
+                        <option value="merge">Gộp thành một PDF</option>
+                        <option value="split">Tách trang đã chọn</option>
+                      </select>
+                    </label>
+                  </div>
+                  <button class="primary-button" id="exportButton" type="button">
+                    <svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5"></path><path d="M5 20h14"></path></svg>
+                    Xuất PDF
+                  </button>
+                </footer>
               </div>
             </div>
-
-            <div class="pages-area">
-              <div class="pages-heading">
-                <div><h2>Sắp xếp trang</h2><p>Kéo và thả các trang để thay đổi thứ tự</p></div>
-                <span class="demo-pill">BẢN XEM TRƯỚC GIAO DIỆN</span>
-              </div>
-              <div class="page-grid" id="pageGrid" aria-live="polite"></div>
-            </div>
-
-            <footer class="editor-footer">
-              <div class="output-options">
-                <label>
-                  <span>Tên file đầu ra</span>
-                  <div class="filename-input"><input id="outputName" value="tai-lieu-da-chinh-sua" /><span>.pdf</span></div>
-                </label>
-                <label>
-                  <span>Chế độ xuất</span>
-                  <select id="outputMode">
-                    <option value="merge">Gộp thành một PDF</option>
-                    <option value="split">Tách trang đã chọn</option>
-                  </select>
-                </label>
-              </div>
-              <button class="primary-button" id="exportButton" type="button">
-                <svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5"></path><path d="M5 20h14"></path></svg>
-                Xuất PDF
-              </button>
-            </footer>
           </div>
         </section>
       </main>
