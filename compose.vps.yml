@@ -1,0 +1,35 @@
+services:
+  web-tool-pdf:
+    expose:
+      - "3000"
+    ports: []
+    networks:
+      - web
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: web-tool-pdf-caddy
+    restart: unless-stopped
+    depends_on:
+      web-tool-pdf:
+        condition: service_healthy
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - web
+
+networks:
+  web:
+
+volumes:
+  caddy_data:
+  caddy_config:

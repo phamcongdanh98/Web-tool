@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="vi" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <meta name="description" content="Công cụ nén PDF thông minh trực tuyến" />
+
+    <title>Nén PDF Thông Minh</title>
+
+    <!--
+    Áp dụng giao diện trước khi CSS tải xong,
+    tránh hiện chớp nền sáng khi đang dùng Dark Mode.
+  -->
+    <script>
+      (() => {
+        const storageKey = "nen-pdf-theme";
+        const savedTheme = localStorage.getItem(storageKey);
+
+        const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
+          .matches
+          ? "dark"
+          : "light";
+
+        document.documentElement.dataset.theme =
+          savedTheme === "dark" || savedTheme === "light"
+            ? savedTheme
+            : systemTheme;
+      })();
+    </script>
+
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+
+  <body>
+    <div class="app-shell">
+      <!-- =====================================================
+         HEADER
+    ====================================================== -->
+
+      <header class="topbar">
+        <a href="#" class="brand" aria-label="Trang chủ Nén PDF Thông Minh">
+          <span class="brand-logo" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </span>
+
+          <span class="brand-text">
+            <strong>Nén PDF Thông Minh</strong>
+
+            <small> Giảm dung lượng PDF mà vẫn giữ chất lượng tốt </small>
+          </span>
+        </a>
+
+        <nav class="topbar-actions" aria-label="Điều hướng chính">
+          <button
+            type="button"
+            class="header-button"
+            id="themeToggle"
+            aria-label="Chuyển chế độ giao diện"
+            title="Chuyển chế độ giao diện"
+          >
+            <span class="header-button__icon" id="themeIcon" aria-hidden="true">
+              ☾
+            </span>
+
+            <span id="themeText"> Giao diện tối </span>
+          </button>
+
+          <button type="button" class="header-button" id="historyButton">
+            <span class="header-button__icon" aria-hidden="true"> ◷ </span>
+
+            <span>Lịch sử</span>
+          </button>
+
+          <button
+            type="button"
+            class="header-button header-button--accent"
+            id="aboutButton"
+          >
+            <span class="header-button__icon" aria-hidden="true"> ✦ </span>
+
+            <span>Giới thiệu</span>
+          </button>
+        </nav>
+      </header>
+
+      <!-- =====================================================
+         NỘI DUNG CHÍNH
+    ====================================================== -->
+
+      <main class="main-layout">
+        <!-- ===================================================
+           CỘT TRÁI
+      ==================================================== -->
+
+        <section class="card settings-card" aria-label="Thiết lập nén PDF">
+          <!-- BƯỚC 1 -->
+
+          <div class="section-title">
+            <span class="section-number">1.</span>
+            <h2>Tải lên PDF</h2>
+          </div>
+
+          <label
+            class="upload-zone"
+            id="uploadZone"
+            for="pdfInput"
+            tabindex="0"
+          >
+            <input
+              type="file"
+              id="pdfInput"
+              accept=".pdf,application/pdf"
+              hidden
+            />
+
+            <span class="upload-zone__icon" aria-hidden="true"> ✚ </span>
+
+            <strong> Kéo và thả file PDF vào đây </strong>
+
+            <span class="upload-zone__or"> hoặc </span>
+
+            <span class="upload-zone__button"> ▣ Chọn file PDF </span>
+
+            <small> Hỗ trợ PDF tối đa 500 MB </small>
+          </label>
+
+          <article
+            class="selected-file selected-file--empty"
+            id="selectedFile"
+            aria-live="polite"
+          >
+            <span class="selected-file__icon" aria-hidden="true"> PDF </span>
+
+            <div class="selected-file__info">
+              <strong id="selectedFileName"> Chưa chọn file </strong>
+
+              <small id="selectedFileMeta">
+                Hãy chọn một file PDF để bắt đầu
+              </small>
+            </div>
+
+            <button
+              type="button"
+              class="icon-button"
+              id="removeFileButton"
+              aria-label="Xóa file đã chọn"
+              title="Xóa file"
+              disabled
+            >
+              ×
+            </button>
+          </article>
+
+          <!-- BƯỚC 2 -->
+
+          <div class="section-title section-title--spaced">
+            <span class="section-number">2.</span>
+            <h2>Cài đặt nén</h2>
+          </div>
+
+          <div class="settings-grid">
+            <!-- DUNG LƯỢNG MỤC TIÊU -->
+
+            <div class="field-group">
+              <label for="targetSize"> Dung lượng mục tiêu </label>
+
+              <div class="input-combined">
+                <input
+                  type="number"
+                  id="targetSize"
+                  min="0.2"
+                  step="0.1"
+                  value="3"
+                />
+
+                <select id="targetUnit" aria-label="Đơn vị dung lượng">
+                  <option value="MB" selected>MB</option>
+
+                  <option value="KB">KB</option>
+                </select>
+              </div>
+
+              <small> PDF sau nén sẽ nhỏ hơn hoặc gần giá trị này. </small>
+            </div>
+
+            <!-- CHẾ ĐỘ NÉN -->
+
+            <div class="field-group">
+              <label for="compressionMode"> Chế độ nén </label>
+
+              <select id="compressionMode">
+                <option value="text" selected>Ưu tiên rõ chữ</option>
+
+                <option value="balanced">Cân bằng</option>
+
+                <option value="image">Ưu tiên hình ảnh</option>
+              </select>
+
+              <small id="compressionModeDescription">
+                Phù hợp hồ sơ, tài liệu chữ và bảng biểu.
+              </small>
+            </div>
+
+            <!-- MÀU SẮC -->
+
+            <fieldset class="field-group field-group--full">
+              <legend>Màu sắc</legend>
+
+              <div class="choice-grid">
+                <label class="choice-card choice-card--active">
+                  <input type="radio" name="colorMode" value="color" checked />
+
+                  <span class="choice-card__icon" aria-hidden="true"> ◉ </span>
+
+                  <span class="choice-card__content">
+                    <strong>Giữ màu</strong>
+
+                    <small> Giữ con dấu đỏ và chữ ký màu </small>
+                  </span>
+                </label>
+
+                <label class="choice-card">
+                  <input type="radio" name="colorMode" value="gray" />
+
+                  <span class="choice-card__icon" aria-hidden="true"> ◐ </span>
+
+                  <span class="choice-card__content">
+                    <strong>Thang xám</strong>
+
+                    <small> Nhẹ hơn nhưng không còn màu </small>
+                  </span>
+                </label>
+              </div>
+            </fieldset>
+
+            <!-- DPI -->
+
+            <div class="field-group">
+              <label for="maxDpi"> Độ phân giải tối đa </label>
+
+              <select id="maxDpi">
+                <option value="300">300 DPI — In chất lượng cao</option>
+
+                <option value="200">200 DPI — Rõ và cân bằng</option>
+
+                <option value="150" selected>150 DPI — Đề xuất</option>
+
+                <option value="120">120 DPI — Nhẹ hơn</option>
+
+                <option value="96">96 DPI — Xem trên màn hình</option>
+              </select>
+
+              <small>
+                DPI cao hơn giúp chữ và hình rõ hơn nhưng file lớn hơn.
+              </small>
+            </div>
+
+            <!-- JPEG QUALITY -->
+
+            <div class="field-group">
+              <div class="field-label-row">
+                <label for="jpegQuality"> Chất lượng ảnh JPEG </label>
+
+                <output id="qualityOutput" for="jpegQuality"> 75% </output>
+              </div>
+
+              <input
+                type="range"
+                id="jpegQuality"
+                min="35"
+                max="95"
+                value="75"
+              />
+
+              <small>
+                Chất lượng cao hơn sẽ giữ ảnh đẹp hơn nhưng tăng dung lượng.
+              </small>
+            </div>
+
+            <!-- XỬ LÝ SONG SONG -->
+
+            <div class="field-group field-group--full">
+              <div class="toggle-row">
+                <div>
+                  <label for="parallelProcessing"> Xử lý song song </label>
+
+                  <small> Tận dụng nhiều luồng để xử lý nhanh hơn. </small>
+                </div>
+
+                <label class="switch">
+                  <input type="checkbox" id="parallelProcessing" checked />
+
+                  <span class="switch__track"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            class="primary-button"
+            id="compressButton"
+            disabled
+          >
+            <span aria-hidden="true">⌁</span>
+            <span>BẮT ĐẦU NÉN</span>
+          </button>
+        </section>
+
+        <!-- ===================================================
+           CỘT PHẢI
+      ==================================================== -->
+
+        <div class="right-column">
+          <!-- BƯỚC 3: XEM TRƯỚC -->
+
+          <section class="card preview-section" aria-label="Xem trước PDF">
+            <div class="section-title">
+              <span class="section-number">3.</span>
+              <h2>Xem trước</h2>
+            </div>
+
+            <div class="preview-grid">
+              <article class="preview-card">
+                <header class="preview-card__header">
+                  <strong>Bản gốc</strong>
+
+                  <span class="file-size file-size--original" id="originalSize">
+                    —
+                  </span>
+                </header>
+
+                <div class="pdf-preview" id="originalPreview">
+                  <div class="empty-preview">
+                    <span>PDF</span>
+
+                    <p>Chọn file để xem trước</p>
+                  </div>
+                </div>
+
+                <footer id="originalPageInfo">Trang — / —</footer>
+              </article>
+
+              <div class="preview-arrow" aria-hidden="true">→</div>
+
+              <article class="preview-card">
+                <header class="preview-card__header">
+                  <strong>Dự kiến sau nén</strong>
+
+                  <span class="file-size file-size--result" id="estimatedSize">
+                    —
+                  </span>
+                </header>
+
+                <div
+                  class="pdf-preview pdf-preview--compressed"
+                  id="compressedPreview"
+                >
+                  <div class="empty-preview">
+                    <span>PDF</span>
+
+                    <p>Bản xem trước ước tính</p>
+                  </div>
+                </div>
+
+                <footer id="compressedPageInfo">Trang — / —</footer>
+              </article>
+            </div>
+
+            <div class="info-notice">
+              <span aria-hidden="true">ⓘ</span>
+
+              <p>
+                Đây là dung lượng và bản xem trước ước tính. Kết quả thực tế có
+                thể chênh lệch nhẹ.
+              </p>
+            </div>
+          </section>
+
+          <!-- BƯỚC 4: KẾT QUẢ -->
+
+          <section class="card result-section" aria-label="Kết quả nén">
+            <div class="section-title">
+              <span class="section-number">4.</span>
+              <h2>Kết quả</h2>
+            </div>
+
+            <div class="progress-heading">
+              <strong id="progressStatus"> Chưa nén </strong>
+
+              <span id="progressPercent"> 0% </span>
+            </div>
+
+            <div class="progress-track" aria-label="Tiến trình nén">
+              <span id="progressFill"></span>
+            </div>
+
+            <div class="result-stats">
+              <div class="result-stat">
+                <span>Bản gốc</span>
+
+                <strong class="result-stat__original" id="resultOriginalSize">
+                  —
+                </strong>
+              </div>
+
+              <div class="result-stat">
+                <span>Dự kiến sau nén</span>
+
+                <strong class="result-stat__success" id="resultCompressedSize">
+                  —
+                </strong>
+              </div>
+
+              <div class="result-stat">
+                <span>Giảm</span>
+
+                <strong class="result-stat__success" id="resultReduction">
+                  —
+                </strong>
+              </div>
+
+              <div class="result-stat">
+                <span>Thời gian nén</span>
+
+                <strong class="result-stat__success" id="resultDuration">
+                  —
+                </strong>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              class="download-button"
+              id="downloadButton"
+              disabled
+            >
+              <span aria-hidden="true">⇩</span>
+              <span>TẢI PDF ĐÃ NÉN</span>
+            </button>
+          </section>
+        </div>
+      </main>
+
+      <!-- =====================================================
+         FOOTER
+    ====================================================== -->
+
+      <footer class="footer">
+        <div>
+          <strong>⚡ Xử lý nhanh</strong>
+          <span>Tự động chọn thiết lập phù hợp</span>
+        </div>
+
+        <div>
+          <strong>🔒 Bảo mật</strong>
+          <span>File chỉ được dùng trong phiên xử lý</span>
+        </div>
+
+        <div>
+          <strong>◈ Giữ chất lượng</strong>
+          <span>Ưu tiên chữ, bảng và con dấu dễ đọc</span>
+        </div>
+      </footer>
+    </div>
+
+    <!-- =====================================================
+       MODAL
+  ====================================================== -->
+
+    <div class="modal-backdrop" id="modalBackdrop" hidden>
+      <section
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modalTitle"
+      >
+        <header class="modal__header">
+          <h2 id="modalTitle">Thông tin</h2>
+
+          <button
+            type="button"
+            class="icon-button"
+            id="modalCloseButton"
+            aria-label="Đóng"
+          >
+            ×
+          </button>
+        </header>
+
+        <div class="modal__content" id="modalContent"></div>
+      </section>
+    </div>
+
+    <!-- =====================================================
+       TOAST
+  ====================================================== -->
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

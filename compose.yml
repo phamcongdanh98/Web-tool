@@ -1,0 +1,30 @@
+services:
+  web-tool-pdf:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: web-tool-pdf:latest
+    container_name: web-tool-pdf
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      TEMP_ROOT: /tmp/web-tool-pdf
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      - pdf_temp:/tmp/web-tool-pdf
+    mem_limit: ${CONTAINER_MEMORY_LIMIT:-2g}
+    cpus: ${CONTAINER_CPU_LIMIT:-2.0}
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "node", "scripts/healthcheck.js"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  pdf_temp:

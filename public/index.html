@@ -1,0 +1,717 @@
+<!doctype html>
+<html lang="vi" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <meta
+      name="description"
+      content="Bộ công cụ xử lý PDF, hình ảnh và tài liệu trực tuyến"
+    />
+
+    <title>PDF Tools - Bộ công cụ tài liệu</title>
+
+    <script>
+      (() => {
+        const storageKey = "document-tools-theme";
+        const savedTheme = localStorage.getItem(storageKey);
+
+        const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
+          .matches
+          ? "dark"
+          : "light";
+
+        document.documentElement.dataset.theme =
+          savedTheme === "dark" || savedTheme === "light"
+            ? savedTheme
+            : systemTheme;
+      })();
+    </script>
+
+    <link rel="stylesheet" href="/home.css" />
+  </head>
+
+  <body>
+    <div class="app-shell">
+      <!-- =====================================================
+         HEADER
+    ====================================================== -->
+
+      <header class="topbar">
+        <a href="/" class="brand" aria-label="Trang chủ PDF Tools">
+          <span class="brand-logo" aria-hidden="true">
+            <span class="brand-logo__page"></span>
+            <span class="brand-logo__line brand-logo__line--one"></span>
+            <span class="brand-logo__line brand-logo__line--two"></span>
+            <span class="brand-logo__line brand-logo__line--three"></span>
+          </span>
+
+          <span class="brand-content">
+            <strong>PDF Tools</strong>
+            <small>Bộ công cụ tài liệu</small>
+          </span>
+        </a>
+
+        <nav class="main-navigation" aria-label="Điều hướng chính">
+          <a href="/" class="navigation-link navigation-link--active">
+            Trang chủ
+          </a>
+
+          <a href="#toolsSection" class="navigation-link"> Công cụ </a>
+
+          <button
+            type="button"
+            class="navigation-link navigation-link--button"
+            id="guideNavigationButton"
+          >
+            Hướng dẫn
+          </button>
+
+          <button
+            type="button"
+            class="navigation-link navigation-link--button"
+            id="blogButton"
+          >
+            Blog
+          </button>
+
+          <button
+            type="button"
+            class="navigation-link navigation-link--button"
+            id="contactButton"
+          >
+            Liên hệ
+          </button>
+        </nav>
+
+        <div class="topbar-actions">
+          <label class="search-box" for="toolSearch">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="7"></circle>
+              <path d="m20 20-4-4"></path>
+            </svg>
+
+            <input
+              type="search"
+              id="toolSearch"
+              placeholder="Tìm công cụ..."
+              autocomplete="off"
+            />
+
+            <kbd>Ctrl K</kbd>
+          </label>
+
+          <button
+            type="button"
+            class="theme-button"
+            id="themeToggle"
+            aria-label="Chuyển giao diện"
+            title="Chuyển giao diện"
+          >
+            <span id="themeIcon">☾</span>
+          </button>
+
+          <button
+            type="button"
+            class="profile-button"
+            id="profileButton"
+            aria-label="Thông tin tài khoản"
+          >
+            DP
+          </button>
+        </div>
+      </header>
+
+      <!-- =====================================================
+         MOBILE HEADER
+    ====================================================== -->
+
+      <header class="mobile-topbar">
+        <button
+          type="button"
+          class="mobile-menu-button"
+          id="mobileMenuButton"
+          aria-label="Mở menu"
+        >
+          <svg viewBox="0 0 24 24">
+            <path d="M4 7h16"></path>
+            <path d="M4 12h16"></path>
+            <path d="M4 17h16"></path>
+          </svg>
+        </button>
+
+        <a href="/" class="mobile-brand">
+          <span class="mobile-brand-logo">P</span>
+
+          <span>
+            <strong>PDF Tools</strong>
+            <small>Bộ công cụ tài liệu</small>
+          </span>
+        </a>
+
+        <div class="mobile-actions">
+          <button
+            type="button"
+            class="mobile-theme-button"
+            id="mobileThemeToggle"
+            aria-label="Chuyển giao diện"
+          >
+            <span id="mobileThemeIcon">☾</span>
+          </button>
+
+          <button
+            type="button"
+            class="mobile-profile-button"
+            id="mobileProfileButton"
+          >
+            DP
+          </button>
+        </div>
+      </header>
+
+      <!-- =====================================================
+         MOBILE MENU
+    ====================================================== -->
+
+      <aside
+        class="mobile-menu"
+        id="mobileMenu"
+        aria-label="Menu di động"
+        hidden
+      >
+        <div class="mobile-menu__header">
+          <strong>Menu</strong>
+
+          <button type="button" id="mobileMenuClose" aria-label="Đóng menu">
+            ×
+          </button>
+        </div>
+
+        <nav>
+          <a href="/">Trang chủ</a>
+          <a href="#toolsSection">Công cụ</a>
+
+          <button type="button" id="mobileGuideButton">Hướng dẫn</button>
+
+          <button type="button" id="mobileBlogButton">Blog</button>
+
+          <button type="button" id="mobileContactButton">Liên hệ</button>
+        </nav>
+      </aside>
+
+      <div class="mobile-menu-backdrop" id="mobileMenuBackdrop" hidden></div>
+
+      <!-- =====================================================
+         MAIN
+    ====================================================== -->
+
+      <main>
+        <!-- ===================================================
+           HERO
+      ==================================================== -->
+
+        <section class="hero-section">
+          <div
+            class="hero-background-decoration hero-background-decoration--one"
+          ></div>
+          <div
+            class="hero-background-decoration hero-background-decoration--two"
+          ></div>
+
+          <div class="hero-content">
+            <div class="hero-copy">
+              <span class="hero-label"> ✦ Công cụ tài liệu trực tuyến </span>
+
+              <h1>
+                Bộ công cụ xử lý tài liệu
+                <span>nhanh chóng & miễn phí</span>
+              </h1>
+
+              <p>
+                Xử lý PDF, hình ảnh và tài liệu ngay trên trình duyệt. An toàn,
+                bảo mật, trực quan và dễ sử dụng.
+              </p>
+
+              <div class="hero-actions">
+                <button type="button" class="primary-button" id="exploreButton">
+                  Khám phá công cụ
+
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m9 18 6-6-6-6"></path>
+                  </svg>
+                </button>
+
+                <button type="button" class="secondary-button" id="helpButton">
+                  Hướng dẫn sử dụng
+
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5v-16Z"
+                    ></path>
+                    <path
+                      d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5v-16Z"
+                    ></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="hero-visual" aria-hidden="true">
+              <div class="hero-document hero-document--back"></div>
+
+              <div class="hero-document hero-document--middle">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+
+              <div class="hero-document hero-document--front">
+                <strong>PDF</strong>
+
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+
+              <div class="hero-image-icon">
+                <svg viewBox="0 0 24 24">
+                  <rect x="3" y="4" width="18" height="16" rx="3"></rect>
+                  <circle cx="9" cy="10" r="2"></circle>
+                  <path d="m5 18 5-5 3 3 2-2 4 4"></path>
+                </svg>
+              </div>
+
+              <div class="hero-shield-icon">
+                <svg viewBox="0 0 24 24">
+                  <path
+                    d="M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10Z"
+                  ></path>
+                  <path d="m8.5 12 2.2 2.2 4.8-5"></path>
+                </svg>
+              </div>
+
+              <span class="hero-spark hero-spark--one">✦</span>
+              <span class="hero-spark hero-spark--two">✦</span>
+              <span class="hero-spark hero-spark--three">•</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===================================================
+           TOOLS
+      ==================================================== -->
+
+        <section class="tools-section" id="toolsSection">
+          <header class="tools-heading">
+            <div>
+              <span class="section-label"> Tiện ích trực tuyến </span>
+
+              <div class="tools-title-row">
+                <h2>Tất cả công cụ</h2>
+
+                <span class="tools-count" id="toolCount"> 6 công cụ </span>
+              </div>
+            </div>
+
+            <div class="tools-controls">
+              <label class="mobile-search-box" for="mobileToolSearch">
+                <svg viewBox="0 0 24 24">
+                  <circle cx="11" cy="11" r="7"></circle>
+                  <path d="m20 20-4-4"></path>
+                </svg>
+
+                <input
+                  type="search"
+                  id="mobileToolSearch"
+                  placeholder="Tìm công cụ..."
+                />
+              </label>
+
+              <label class="sort-box" for="toolSort">
+                <svg viewBox="0 0 24 24">
+                  <path d="M4 7h10"></path>
+                  <path d="M4 12h7"></path>
+                  <path d="M4 17h4"></path>
+                  <path d="m17 5 3 3-3 3"></path>
+                  <path d="M20 8h-5"></path>
+                </svg>
+
+                <select id="toolSort">
+                  <option value="popular">Phổ biến nhất</option>
+
+                  <option value="name">Tên A - Z</option>
+                </select>
+              </label>
+            </div>
+          </header>
+
+          <div class="tools-grid" id="toolsGrid">
+            <!-- NÉN PDF -->
+
+            <article
+              class="tool-card"
+              data-tool-name="Nén PDF giảm dung lượng tài liệu hồ sơ bảng biểu"
+              data-tool-title="Nén PDF"
+              data-tool-popularity="1"
+            >
+              <div class="tool-card__icon tool-card__icon--purple">
+                <svg viewBox="0 0 24 24">
+                  <path d="M8 3H4a1 1 0 0 0-1 1v4"></path>
+                  <path d="M16 3h4a1 1 0 0 1 1 1v4"></path>
+                  <path d="M8 21H4a1 1 0 0 1-1-1v-4"></path>
+                  <path d="M16 21h4a1 1 0 0 0 1-1v-4"></path>
+                  <path d="M8 12h8"></path>
+                  <path d="M12 8v8"></path>
+                </svg>
+              </div>
+
+              <div class="tool-card__body">
+                <div class="tool-card__title">
+                  <h3>Nén PDF</h3>
+
+                  <span class="popular-badge"> Phổ biến </span>
+                </div>
+
+                <p>
+                  Giảm dung lượng PDF mà vẫn giữ chữ, bảng biểu và hình ảnh rõ
+                  nét.
+                </p>
+              </div>
+
+              <a href="/nen-pdf" class="tool-card__action">
+                Sử dụng ngay
+
+                <svg viewBox="0 0 24 24">
+                  <path d="m9 18 6-6-6-6"></path>
+                </svg>
+              </a>
+            </article>
+
+            <!-- CHỈNH SỬA PDF -->
+
+            <article
+              class="tool-card"
+              data-tool-name="Chỉnh sửa PDF tách file gộp file sắp xếp trang xóa trang xoay trang"
+              data-tool-title="Chỉnh sửa PDF"
+              data-tool-popularity="2"
+            >
+              <div class="tool-card__icon tool-card__icon--blue">
+                <svg viewBox="0 0 24 24">
+                  <rect x="3" y="6" width="11" height="14" rx="2"></rect>
+                  <rect x="10" y="3" width="11" height="14" rx="2"></rect>
+                  <path d="M7 10h3"></path>
+                  <path d="M14 7h3"></path>
+                </svg>
+              </div>
+
+              <div class="tool-card__body">
+                <div class="tool-card__title">
+                  <h3>Chỉnh sửa PDF</h3>
+                </div>
+
+                <p>
+                  Tách file, gộp file, xóa trang, xoay trang và sắp xếp lại thứ
+                  tự trang PDF.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                class="tool-card__action"
+                data-coming-soon="Chỉnh sửa PDF"
+              >
+                Sử dụng ngay
+
+                <svg viewBox="0 0 24 24">
+                  <path d="m9 18 6-6-6-6"></path>
+                </svg>
+              </button>
+            </article>
+
+            <!-- PDF SANG ẢNH -->
+
+            <article
+              class="tool-card"
+              data-tool-name="PDF sang ảnh chuyển trang PDF thành JPG PNG WebP"
+              data-tool-title="PDF sang ảnh"
+              data-tool-popularity="3"
+            >
+              <div class="tool-card__icon tool-card__icon--orange">
+                <svg viewBox="0 0 24 24">
+                  <rect x="3" y="4" width="18" height="16" rx="3"></rect>
+                  <circle cx="9" cy="10" r="2"></circle>
+                  <path d="m5 18 5-5 3 3 2-2 4 4"></path>
+                </svg>
+              </div>
+
+              <div class="tool-card__body">
+                <div class="tool-card__title">
+                  <h3>PDF sang ảnh</h3>
+                </div>
+
+                <p>
+                  Chuyển từng trang PDF thành hình ảnh JPG, PNG hoặc WebP chất
+                  lượng cao.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                class="tool-card__action"
+                data-coming-soon="PDF sang ảnh"
+              >
+                Sử dụng ngay
+
+                <svg viewBox="0 0 24 24">
+                  <path d="m9 18 6-6-6-6"></path>
+                </svg>
+              </button>
+            </article>
+
+            <!-- PDF SANG WORD -->
+
+            <article
+              class="tool-card"
+              data-tool-name="PDF sang Word chuyển PDF sang DOCX chỉnh sửa văn bản"
+              data-tool-title="PDF sang Word"
+              data-tool-popularity="4"
+            >
+              <div class="tool-card__icon tool-card__icon--indigo">
+                <svg viewBox="0 0 24 24">
+                  <path d="M4 4h11l5 5v11H4V4Z"></path>
+                  <path d="M15 4v5h5"></path>
+                  <path d="m7 12 1.6 5 1.9-5 1.9 5 1.6-5"></path>
+                </svg>
+              </div>
+
+              <div class="tool-card__body">
+                <div class="tool-card__title">
+                  <h3>PDF sang Word</h3>
+                </div>
+
+                <p>
+                  Chuyển nội dung PDF sang tài liệu Word để chỉnh sửa văn bản dễ
+                  dàng hơn.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                class="tool-card__action"
+                data-coming-soon="PDF sang Word"
+              >
+                Sử dụng ngay
+
+                <svg viewBox="0 0 24 24">
+                  <path d="m9 18 6-6-6-6"></path>
+                </svg>
+              </button>
+            </article>
+
+            <!-- WORD SANG PDF -->
+
+            <article
+              class="tool-card"
+              data-tool-name="Word sang PDF chuyển DOC DOCX sang PDF"
+              data-tool-title="Word sang PDF"
+              data-tool-popularity="5"
+            >
+              <div class="tool-card__icon tool-card__icon--cyan">
+                <svg viewBox="0 0 24 24">
+                  <path d="M4 4h11l5 5v11H4V4Z"></path>
+                  <path d="M15 4v5h5"></path>
+                  <path d="M7 13h3"></path>
+                  <path d="M7 16h7"></path>
+                </svg>
+              </div>
+
+              <div class="tool-card__body">
+                <div class="tool-card__title">
+                  <h3>Word sang PDF</h3>
+                </div>
+
+                <p>
+                  Chuyển tài liệu Word DOC hoặc DOCX sang định dạng PDF để chia
+                  sẻ dễ dàng.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                class="tool-card__action"
+                data-coming-soon="Word sang PDF"
+              >
+                Sử dụng ngay
+
+                <svg viewBox="0 0 24 24">
+                  <path d="m9 18 6-6-6-6"></path>
+                </svg>
+              </button>
+            </article>
+
+            <!-- NÉN ẢNH -->
+
+            <article
+              class="tool-card"
+              data-tool-name="Nén ảnh giảm dung lượng JPG JPEG PNG WebP"
+              data-tool-title="Nén ảnh"
+              data-tool-popularity="6"
+            >
+              <div class="tool-card__icon tool-card__icon--pink">
+                <svg viewBox="0 0 24 24">
+                  <rect x="3" y="4" width="18" height="16" rx="3"></rect>
+                  <circle cx="9" cy="10" r="2"></circle>
+                  <path d="m5 18 5-5 3 3 2-2 4 4"></path>
+                  <path d="M18 2v5"></path>
+                  <path d="M15.5 4.5h5"></path>
+                </svg>
+              </div>
+
+              <div class="tool-card__body">
+                <div class="tool-card__title">
+                  <h3>Nén ảnh</h3>
+                </div>
+
+                <p>
+                  Giảm dung lượng JPG, PNG và WebP mà vẫn giữ chất lượng hình
+                  ảnh tốt.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                class="tool-card__action"
+                data-coming-soon="Nén ảnh"
+              >
+                Sử dụng ngay
+
+                <svg viewBox="0 0 24 24">
+                  <path d="m9 18 6-6-6-6"></path>
+                </svg>
+              </button>
+            </article>
+          </div>
+
+          <div class="empty-tools" id="emptyTools" hidden>
+            <span>⌕</span>
+
+            <h3>Không tìm thấy công cụ</h3>
+
+            <p>Hãy thử tìm với một từ khóa khác.</p>
+          </div>
+        </section>
+
+        <!-- ===================================================
+           FEATURES
+      ==================================================== -->
+
+        <section class="features-section">
+          <article class="feature-item">
+            <span class="feature-icon feature-icon--blue">
+              <svg viewBox="0 0 24 24">
+                <path
+                  d="M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10Z"
+                ></path>
+                <path d="m8.5 12 2.2 2.2 4.8-5"></path>
+              </svg>
+            </span>
+
+            <div>
+              <strong>Bảo mật & riêng tư</strong>
+
+              <small>
+                File được xử lý an toàn và tự động xóa sau khi hoàn tất.
+              </small>
+            </div>
+          </article>
+
+          <article class="feature-item">
+            <span class="feature-icon feature-icon--purple">
+              <svg viewBox="0 0 24 24">
+                <path d="m13 2-9 12h7l-1 8 10-13h-7V2Z"></path>
+              </svg>
+            </span>
+
+            <div>
+              <strong>Xử lý nhanh chóng</strong>
+
+              <small>
+                Công nghệ tối ưu giúp xử lý tài liệu trong thời gian ngắn.
+              </small>
+            </div>
+          </article>
+
+          <article class="feature-item">
+            <span class="feature-icon feature-icon--pink">
+              <svg viewBox="0 0 24 24">
+                <rect x="3" y="4" width="18" height="14" rx="2"></rect>
+                <path d="M8 21h8"></path>
+                <path d="M12 18v3"></path>
+              </svg>
+            </span>
+
+            <div>
+              <strong>Hoạt động mọi nơi</strong>
+
+              <small>
+                Dùng trên máy tính, điện thoại và mọi trình duyệt hiện đại.
+              </small>
+            </div>
+          </article>
+
+          <article class="feature-item">
+            <span class="feature-icon feature-icon--cyan">
+              <svg viewBox="0 0 24 24">
+                <path d="M4 9h16v11H4V9Z"></path>
+                <path d="M2 9h20"></path>
+                <path d="M8 9V6a2 2 0 0 1 4 0v3"></path>
+                <path d="M12 9V5a2 2 0 0 1 4 0v4"></path>
+              </svg>
+            </span>
+
+            <div>
+              <strong>Hoàn toàn miễn phí</strong>
+
+              <small>
+                Các công cụ cơ bản luôn miễn phí và không giới hạn.
+              </small>
+            </div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <!-- =====================================================
+       MODAL
+  ====================================================== -->
+
+    <div class="modal-backdrop" id="modalBackdrop" hidden>
+      <section
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modalTitle"
+      >
+        <header class="modal__header">
+          <h2 id="modalTitle">Thông báo</h2>
+
+          <button type="button" id="modalCloseButton" aria-label="Đóng">
+            ×
+          </button>
+        </header>
+
+        <div class="modal__content" id="modalContent"></div>
+      </section>
+    </div>
+
+    <!-- =====================================================
+       TOAST
+  ====================================================== -->
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="/home.js"></script>
+  </body>
+</html>

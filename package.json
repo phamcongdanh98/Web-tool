@@ -1,0 +1,25 @@
+{
+  "name": "web-tool-pdf",
+  "version": "3.0.0",
+  "private": true,
+  "description": "Bộ công cụ PDF triển khai bằng Node.js, Fastify, MuPDF.js, Docker và VPS",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "check": "node scripts/check-syntax.js",
+    "healthcheck": "node scripts/healthcheck.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20 <23"
+  },
+  "dependencies": {
+    "@fastify/multipart": "^9.3.0",
+    "@fastify/static": "^8.3.0",
+    "fastify": "^5.6.0",
+    "mupdf": "^1.28.0",
+    "pdf-lib": "^1.17.1"
+  }
+}

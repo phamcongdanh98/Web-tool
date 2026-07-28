@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: web-tool-pdf
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: MAX_UPLOAD_MB
+        value: 20
+      - key: MAX_PDF_PAGES
+        value: 200
+      - key: MAX_CONCURRENT_JOBS
+        value: 1
+      - key: MAX_QUEUE_SIZE
+        value: 3
+      - key: REQUEST_TIMEOUT_MS
+        value: 600000
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=384
