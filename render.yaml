@@ -11,9 +11,9 @@ services:
       - key: HOST
         value: 0.0.0.0
       - key: MAX_UPLOAD_MB
-        value: 50
+        value: 35
       - key: MAX_PDF_PAGES
-        value: 200
+        value: 120
       - key: MAX_CONCURRENT_JOBS
         value: 1
       - key: MAX_QUEUE_SIZE
@@ -21,9 +21,9 @@ services:
       - key: REQUEST_TIMEOUT_MS
         value: 600000
       - key: NODE_OPTIONS
-        value: --max-old-space-size=384
+        value: --max-old-space-size=192
       - key: MEMORY_LOG_INTERVAL_MS
-        value: 10000
+        value: 3000
       - key: MEMORY_WARNING_PERCENT
         value: 80
       - key: PROGRESS_LOG_EVERY_PAGES

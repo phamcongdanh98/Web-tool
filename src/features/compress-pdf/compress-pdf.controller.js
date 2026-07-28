@@ -10,7 +10,7 @@ import { logMemory } from "../../core/monitoring/memory-monitor.js";
 import { createCleanup, createTempDirectory } from "../../core/temp/temp-directory.js";
 import { assertPdfSignature, sanitizeDownloadFilename, saveUpload } from "../../shared/files/pdf-upload.js";
 import { getFieldValue } from "../../shared/http/multipart-fields.js";
-import { compressPdf } from "./compress-pdf.service.js";
+import { compressPdf } from "./compress-pdf.worker-client.js";
 
 export function createCompressPdfController({ limiter }) {
   return async function compressPdfController(request, reply) {

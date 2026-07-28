@@ -6,10 +6,14 @@ export const COMPRESSION_LIMITS = Object.freeze({
   MIN_TARGET_BYTES: 200 * 1024,
   MAX_TARGET_BYTES: 500 * 1024 * 1024,
   MIN_DPI: 60,
-  MAX_DPI: 300,
+  MAX_DPI: 220,
   MIN_JPEG_QUALITY: 25,
-  MAX_JPEG_QUALITY: 95,
-  SAMPLE_PAGE_COUNT: 5
+  MAX_JPEG_QUALITY: 90,
+  SAMPLE_PAGE_COUNT: 2,
+  MAX_CANDIDATE_COUNT: 6,
+  LOW_MEMORY_LIMIT_MB: 768,
+  LOW_MEMORY_MAX_DPI: 120,
+  LOW_MEMORY_MIN_TARGET_RATIO: 0.12
 });
 
 function clampInteger(value, minimum, maximum, fallback) {
@@ -28,7 +32,7 @@ export function validateCompressionOptions(rawOptions) {
     targetBytes,
     mode: ["text", "balanced", "image"].includes(rawOptions.mode) ? rawOptions.mode : "balanced",
     colorMode: rawOptions.colorMode === "gray" ? "gray" : "color",
-    maxDpi: clampInteger(rawOptions.maxDpi, COMPRESSION_LIMITS.MIN_DPI, COMPRESSION_LIMITS.MAX_DPI, 150),
-    jpegQuality: clampInteger(rawOptions.jpegQuality, COMPRESSION_LIMITS.MIN_JPEG_QUALITY, COMPRESSION_LIMITS.MAX_JPEG_QUALITY, 75)
+    maxDpi: clampInteger(rawOptions.maxDpi, COMPRESSION_LIMITS.MIN_DPI, COMPRESSION_LIMITS.MAX_DPI, 120),
+    jpegQuality: clampInteger(rawOptions.jpegQuality, COMPRESSION_LIMITS.MIN_JPEG_QUALITY, COMPRESSION_LIMITS.MAX_JPEG_QUALITY, 65)
   };
 }

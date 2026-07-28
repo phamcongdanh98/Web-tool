@@ -2,6 +2,7 @@
 
 import fs from "node:fs";
 import os from "node:os";
+import { AppError } from "../errors/app-error.js";
 
 const MB = 1024 * 1024;
 const CGROUP_CURRENT_PATHS = [
@@ -48,11 +49,34 @@ export function getMemorySnapshot(extra = {}) {
     arrayBuffersMb: toMb(usage.arrayBuffers),
     cgroupUsedMb: cgroupCurrent ? toMb(cgroupCurrent) : null,
     cgroupLimitMb: cgroupLimit ? toMb(cgroupLimit) : null,
+    cgroupFreeMb: cgroupLimit ? toMb(Math.max(0, cgroupLimit - effectiveCurrent)) : null,
     cgroupUsagePercent: cgroupLimit ? Number(((effectiveCurrent / cgroupLimit) * 100).toFixed(1)) : null,
     systemFreeMb: toMb(os.freemem()),
     systemTotalMb: toMb(os.totalmem()),
     uptimeSeconds: Math.round(process.uptime())
   };
+}
+
+export function assertMemoryHeadroom({
+  minimumFreeMb = 96,
+  maximumUsagePercent = 82,
+  stage = "compression"
+} = {}) {
+  const snapshot = getMemorySnapshot({ stage });
+  if (
+    snapshot.cgroupLimitMb !== null &&
+    (
+      snapshot.cgroupFreeMb < minimumFreeMb ||
+      snapshot.cgroupUsagePercent >= maximumUsagePercent
+    )
+  ) {
+    throw new AppError(
+      `Máy chủ không còn đủ RAM an toàn để tiếp tục xử lý tại bước ${stage}. Hãy thử file nhỏ hơn hoặc chọn mức nén nhẹ hơn.`,
+      507,
+      "INSUFFICIENT_MEMORY"
+    );
+  }
+  return snapshot;
 }
 
 export function logMemory(logger, message, extra = {}, level = "info") {

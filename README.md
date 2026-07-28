@@ -270,3 +270,27 @@ PROGRESS_LOG_EVERY_PAGES=5
 ```
 
 Nếu Render dừng container bằng SIGKILL do hết RAM, Node.js không thể ghi log sau cùng. Hãy xem dòng `Cảnh báo RAM container đang cao` hoặc `Theo dõi RAM định kỳ` ngay trước lúc server khởi động lại.
+
+## Tối ưu chống quá tải RAM
+
+Bản này có các cơ chế bảo vệ bổ sung:
+
+- MuPDF mở PDF trực tiếp từ đường dẫn file, không đọc thêm toàn bộ PDF vào Buffer Node.js.
+- Tác vụ nén chạy trong child process riêng; nếu worker bị hệ điều hành dừng, web server chính vẫn có thể trả lỗi rõ ràng.
+- Máy RAM thấp chỉ dùng 1 trang mẫu, tối đa 6 cấu hình thử và DPI tối đa 120.
+- Có memory guard trước khi mở tài liệu, render trang, lưu PDF và ghi kết quả.
+- Ước lượng RAM pixmap từng trang trước khi render.
+- Không dựng toàn bộ PDF lần thứ hai trên máy có RAM từ 768 MB trở xuống.
+- Chủ động giải phóng MuPDF, buffer kết quả và gọi GC trong worker.
+- Chặn mục tiêu nén cực đoan trên máy RAM thấp.
+
+Cấu hình Render Free khuyến nghị đã nằm trong `render.yaml`:
+
+```env
+MAX_UPLOAD_MB=35
+MAX_PDF_PAGES=120
+MAX_CONCURRENT_JOBS=1
+MAX_QUEUE_SIZE=3
+NODE_OPTIONS=--max-old-space-size=192
+MEMORY_LOG_INTERVAL_MS=3000
+```
