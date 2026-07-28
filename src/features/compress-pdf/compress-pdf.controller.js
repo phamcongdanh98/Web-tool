@@ -19,10 +19,10 @@ export function createCompressPdfController({ limiter }) {
     const abortController = new AbortController();
     const abort = () => abortController.abort();
 
-    request.raw.once("aborted", abort);
-    reply.raw.once("close", abort);
-    reply.raw.once("finish", cleanup);
-    reply.raw.once("close", cleanup);
+request.raw.once("aborted", abort);
+
+reply.raw.once("finish", cleanup);
+reply.raw.once("close", cleanup);
 
     const inputPath = path.join(temporaryDirectory, "input.pdf");
     const outputPath = path.join(temporaryDirectory, "output.pdf");
