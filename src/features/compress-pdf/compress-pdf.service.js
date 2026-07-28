@@ -7,7 +7,7 @@ import { assertMemoryHeadroom, getMemorySnapshot, logMemory } from "../../core/m
 import { COMPRESSION_LIMITS, validateCompressionOptions } from "./compress-pdf.options.js";
 import {
   buildRasterizedPdf,
-  calculateRetrySettings,
+  calculateRefinementSettings,
   chooseCompressionSettings,
   safeDestroy,
   selectSamplePages,
@@ -78,20 +78,77 @@ export async function compressPdfInProcess({ inputPath, outputPath, maxPageCount
     logger?.info({ requestId, outputBytes: outputBytes.length, finalSettings }, "Dựng toàn bộ PDF hoàn tất");
     logMemory(logger, "RAM sau khi dựng PDF", { requestId, stage: "full-build", outputBytes: outputBytes.length });
 
+    const firstBuildLength = outputBytes.length;
+    const sizeRatio = firstBuildLength / Math.max(1, options.targetBytes);
     const memory = getMemorySnapshot();
-    const lowMemory = memory.cgroupLimitMb !== null && memory.cgroupLimitMb <= COMPRESSION_LIMITS.LOW_MEMORY_LIMIT_MB;
-    if (!lowMemory && outputBytes.length > options.targetBytes) {
-      const retrySettings = calculateRetrySettings(finalSettings, outputBytes.length, options.targetBytes);
-      if (retrySettings.dpi !== finalSettings.dpi || retrySettings.jpegQuality !== finalSettings.jpegQuality) {
-        outputBytes = null;
-        if (typeof global.gc === "function") global.gc();
-        assertMemoryHeadroom({ minimumFreeMb: 192, maximumUsagePercent: 65, stage: "before-retry" });
-        finalSettings = retrySettings;
-        logger?.warn({ requestId, finalSettings, targetBytes: options.targetBytes }, "Dựng lại PDF lần 2 trên máy đủ RAM");
-        outputBytes = await buildRasterizedPdf(document, allPages, finalSettings, { onProgress, signal });
+    const lowMemory =
+      memory.cgroupLimitMb !== null &&
+      memory.cgroupLimitMb <= COMPRESSION_LIMITS.LOW_MEMORY_LIMIT_MB;
+    const needsRefinement =
+      sizeRatio < COMPRESSION_LIMITS.REFINEMENT_TRIGGER_LOWER_RATIO ||
+      sizeRatio > COMPRESSION_LIMITS.REFINEMENT_TRIGGER_UPPER_RATIO;
+
+    if (needsRefinement) {
+      const refinedSettings = calculateRefinementSettings(
+        finalSettings,
+        firstBuildLength,
+        options.targetBytes
+      );
+      const settingsChanged =
+        refinedSettings.dpi !== finalSettings.dpi ||
+        refinedSettings.jpegQuality !== finalSettings.jpegQuality;
+
+      if (settingsChanged) {
+        const beforeRefinement = getMemorySnapshot();
+        const canRefineOnLowMemory =
+          beforeRefinement.cgroupFreeMb === null ||
+          (beforeRefinement.cgroupFreeMb >= 140 &&
+            (beforeRefinement.cgroupUsagePercent === null ||
+              beforeRefinement.cgroupUsagePercent <= 73));
+
+        if (!lowMemory || canRefineOnLowMemory) {
+          outputBytes = null;
+          if (typeof global.gc === "function") global.gc();
+
+          assertMemoryHeadroom({
+            minimumFreeMb: lowMemory ? 128 : 180,
+            maximumUsagePercent: lowMemory ? 76 : 68,
+            stage: "before-refinement"
+          });
+
+          finalSettings = refinedSettings;
+          logger?.warn(
+            {
+              requestId,
+              firstBuildBytes: firstBuildLength,
+              targetBytes: options.targetBytes,
+              sizeRatio: Number(sizeRatio.toFixed(3)),
+              finalSettings,
+              lowMemory
+            },
+            sizeRatio < 1
+              ? "Kết quả thấp hơn mục tiêu, dựng lại một lần để tăng chất lượng"
+              : "Kết quả vượt mục tiêu, dựng lại một lần để bám sát dung lượng"
+          );
+
+          outputBytes = await buildRasterizedPdf(
+            document,
+            allPages,
+            finalSettings,
+            { onProgress, signal }
+          );
+        } else {
+          logger?.warn(
+            {
+              requestId,
+              firstBuildBytes: firstBuildLength,
+              targetBytes: options.targetBytes,
+              memory: beforeRefinement
+            },
+            "Không đủ khoảng trống RAM để tinh chỉnh lần hai; giữ kết quả lần đầu"
+          );
+        }
       }
-    } else if (lowMemory && outputBytes.length > options.targetBytes) {
-      logger?.warn({ requestId, outputBytes: outputBytes.length, targetBytes: options.targetBytes }, "Bỏ qua lần dựng thứ hai để tránh quá tải RAM trên máy cấu hình thấp");
     }
 
     throwIfAborted(signal);
