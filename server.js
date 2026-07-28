@@ -44,14 +44,50 @@ process.on("exit", (code) => {
 });
 
 try {
-  await app.listen({ host: env.HOST, port: env.PORT });
-  app.log.info({ host: env.HOST, port: env.PORT }, "Máy chủ đã khởi động");
-  logMemory(app.log, "RAM ngay sau khi máy chủ khởi động", { stage: "server-started" });
+  app.server.keepAliveTimeout = 120_000;
+  app.server.headersTimeout = 125_000;
+  app.server.requestTimeout = Number(
+    process.env.REQUEST_TIMEOUT_MS || 1_800_000
+  );
+
+  await app.listen({
+    host: env.HOST,
+    port: env.PORT
+  });
+
+  app.log.info(
+    {
+      host: env.HOST,
+      port: env.PORT,
+      keepAliveTimeoutMs: app.server.keepAliveTimeout,
+      headersTimeoutMs: app.server.headersTimeout,
+      requestTimeoutMs: app.server.requestTimeout
+    },
+    "Máy chủ đã khởi động"
+  );
+
+  logMemory(
+    app.log,
+    "RAM ngay sau khi máy chủ khởi động",
+    {
+      stage: "server-started"
+    }
+  );
+
   stopMemoryMonitor = startMemoryMonitor(app.log, {
     intervalMs: env.MEMORY_LOG_INTERVAL_MS,
     warningPercent: env.MEMORY_WARNING_PERCENT
   });
 } catch (error) {
-  app.log.error({ error, memory: getMemorySnapshot({ stage: "listen-error" }) }, "Không thể khởi động máy chủ");
+  app.log.error(
+    {
+      error,
+      memory: getMemorySnapshot({
+        stage: "listen-error"
+      })
+    },
+    "Không thể khởi động máy chủ"
+  );
+
   process.exit(1);
 }
