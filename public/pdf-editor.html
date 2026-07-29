@@ -175,6 +175,28 @@
         </section>
       </main>
 
+      <dialog class="page-preview-dialog" id="pagePreviewDialog" aria-labelledby="pagePreviewTitle">
+        <div class="page-preview-dialog__panel">
+          <header>
+            <div>
+              <strong id="pagePreviewTitle">Xem trước trang</strong>
+              <small id="pagePreviewMeta"></small>
+            </div>
+            <button id="closePagePreview" type="button" aria-label="Đóng xem trước">×</button>
+          </header>
+          <div class="page-preview-dialog__stage">
+            <div class="page-preview-dialog__document" id="pagePreviewDocument">
+              <embed id="largePagePreview" type="application/pdf" title="Xem trước trang PDF" />
+            </div>
+          </div>
+          <footer>
+            <button id="previousPagePreview" type="button">← Trang trước</button>
+            <span id="pagePreviewPosition"></span>
+            <button id="nextPagePreview" type="button">Trang sau →</button>
+          </footer>
+        </div>
+      </dialog>
+
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
     </div>
     <script src="/vendor/pdf-lib.min.js"></script>

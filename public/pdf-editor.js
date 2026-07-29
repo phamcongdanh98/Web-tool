@@ -20,6 +20,15 @@ const elements = {
   selectionToolbar: document.querySelector("#selectionToolbar"),
   exportButton: document.querySelector("#exportButton"),
   topExportButton: document.querySelector("#topExportButton"),
+  pagePreviewDialog: document.querySelector("#pagePreviewDialog"),
+  pagePreviewTitle: document.querySelector("#pagePreviewTitle"),
+  pagePreviewMeta: document.querySelector("#pagePreviewMeta"),
+  pagePreviewDocument: document.querySelector("#pagePreviewDocument"),
+  largePagePreview: document.querySelector("#largePagePreview"),
+  pagePreviewPosition: document.querySelector("#pagePreviewPosition"),
+  previousPagePreview: document.querySelector("#previousPagePreview"),
+  nextPagePreview: document.querySelector("#nextPagePreview"),
+  closePagePreview: document.querySelector("#closePagePreview"),
   toast: document.querySelector("#toast")
 };
 
@@ -28,6 +37,7 @@ const state = {
   pages: [],
   history: [],
   draggedId: null,
+  previewPageId: null,
   toastTimer: null
 };
 
@@ -165,6 +175,7 @@ function pageTemplate(page, index) {
             title="Xem trước ${escapeHtml(page.source)}, trang ${page.sourcePage}"
           />
         </div>
+        <span class="page-preview-hint">Xem lớn</span>
         <span class="page-source" title="${escapeHtml(page.source)}">${escapeHtml(page.source)}</span>
       </div>
       <div class="page-label"><strong>Trang ${index + 1}</strong><span>· gốc ${page.sourcePage}</span></div>
@@ -214,6 +225,36 @@ function render() {
   elements.pageGrid.innerHTML = state.pages.map(pageTemplate).join("");
   updateDocumentUi();
   updateSelectionUi();
+}
+
+function updateLargePreview() {
+  const index = state.pages.findIndex((page) => page.id === state.previewPageId);
+  if (index < 0) {
+    elements.pagePreviewDialog.close();
+    return;
+  }
+  const page = state.pages[index];
+  elements.pagePreviewTitle.textContent = `Trang ${index + 1}`;
+  elements.pagePreviewMeta.textContent = `${page.source} · trang gốc ${page.sourcePage}`;
+  elements.pagePreviewPosition.textContent = `${index + 1} / ${state.pages.length}`;
+  elements.pagePreviewDocument.style.setProperty("--rotation", `${page.rotation}deg`);
+  elements.largePagePreview.src = page.previewUrl;
+  elements.previousPagePreview.disabled = index === 0;
+  elements.nextPagePreview.disabled = index === state.pages.length - 1;
+}
+
+function openLargePreview(page) {
+  state.previewPageId = page.id;
+  updateLargePreview();
+  if (!elements.pagePreviewDialog.open) elements.pagePreviewDialog.showModal();
+}
+
+function moveLargePreview(offset) {
+  const index = state.pages.findIndex((page) => page.id === state.previewPageId);
+  const nextPage = state.pages[index + offset];
+  if (!nextPage) return;
+  state.previewPageId = nextPage.id;
+  updateLargePreview();
 }
 
 function updateSelected(action) {
@@ -270,8 +311,23 @@ elements.pageGrid.addEventListener("click", (event) => {
   if (!card) return;
   const page = state.pages.find((item) => item.id === card.dataset.id);
   if (!page) return;
-  page.selected = !page.selected;
-  updateSelectionUi();
+  if (event.target.closest(".page-check")) {
+    page.selected = !page.selected;
+    updateSelectionUi();
+    return;
+  }
+  openLargePreview(page);
+});
+
+elements.closePagePreview.addEventListener("click", () => elements.pagePreviewDialog.close());
+elements.previousPagePreview.addEventListener("click", () => moveLargePreview(-1));
+elements.nextPagePreview.addEventListener("click", () => moveLargePreview(1));
+elements.pagePreviewDialog.addEventListener("click", (event) => {
+  if (event.target === elements.pagePreviewDialog) elements.pagePreviewDialog.close();
+});
+elements.pagePreviewDialog.addEventListener("close", () => {
+  state.previewPageId = null;
+  elements.largePagePreview.removeAttribute("src");
 });
 
 elements.pageGrid.addEventListener("dragstart", (event) => {
