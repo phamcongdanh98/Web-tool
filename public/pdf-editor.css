@@ -49,17 +49,7 @@ svg { width: 1.25rem; fill: none; stroke: currentColor; stroke-width: 1.8; strok
 .ghost-button svg { width: 16px; }
 .icon-button { width: 40px; }
 
-main { width: min(1840px, calc(100% - 32px)); margin: 0 auto; padding: 38px 0 64px; }
-.hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 30px; margin-bottom: 25px; }
-.eyebrow { color: var(--accent); font-size: 11px; letter-spacing: .14em; font-weight: 800; }
-.hero h1 { margin: 8px 0 8px; font-size: clamp(29px, 3vw, 42px); letter-spacing: -.035em; }
-.hero p { color: var(--muted); margin: 0; font-size: 15px; }
-.privacy-note { display: flex; align-items: center; gap: 12px; padding: 12px 15px; background: var(--surface); border: 1px solid var(--border); border-radius: 13px; box-shadow: 0 8px 22px rgba(36, 43, 72, .04); }
-.privacy-note svg { width: 23px; color: #26a477; }
-.privacy-note span { display: grid; gap: 3px; }
-.privacy-note strong { font-size: 12px; }
-.privacy-note small { color: var(--muted); font-size: 11px; }
-
+main { width: min(1840px, calc(100% - 32px)); margin: 0 auto; padding: 18px 0 48px; }
 .workspace-card { min-height: 590px; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; box-shadow: var(--shadow); overflow: hidden; }
 .empty-state { padding: clamp(25px, 5vw, 66px); }
 .drop-zone { min-height: 370px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; border: 1.5px dashed #a7a4f3; border-radius: 18px; background: linear-gradient(145deg, var(--surface-soft), var(--accent-soft)); cursor: pointer; transition: .2s ease; }
@@ -195,9 +185,7 @@ main { width: min(1840px, calc(100% - 32px)); margin: 0 auto; padding: 38px 0 64
 @media (max-width: 760px) {
   .topbar { height: 64px; padding: 0 15px; }
   .brand small, .ghost-button { display: none; }
-  main { width: calc(100% - 24px); padding-top: 24px; }
-  .hero { align-items: flex-start; }
-  .privacy-note { display: none; }
+  main { width: calc(100% - 24px); padding-top: 12px; }
   .empty-state { padding: 14px; }
   .drop-zone { min-height: 330px; padding: 25px 15px; text-align: center; }
   .feature-row { grid-template-columns: 1fr; gap: 2px; }
