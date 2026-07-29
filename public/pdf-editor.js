@@ -70,7 +70,7 @@ async function detectPageCount(file) {
   return 1;
 }
 
-async function createPages(fileRecord, fileIndex) {
+async function createLegacyPages(fileRecord, fileIndex) {
   const count = await detectPageCount(fileRecord.file);
   return Array.from({ length: count }, (_, pageIndex) => ({
     id: crypto.randomUUID(),
@@ -81,6 +81,45 @@ async function createPages(fileRecord, fileIndex) {
     rotation: 0,
     selected: false
   }));
+}
+
+async function createPages(fileRecord, fileIndex) {
+  if (!window.PDFLib?.PDFDocument) {
+    throw new Error("Không thể tải bộ xử lý PDF.");
+  }
+
+  const sourceBytes = await fileRecord.file.arrayBuffer();
+  const sourceDocument = await window.PDFLib.PDFDocument.load(sourceBytes, {
+    updateMetadata: false
+  });
+  const count = sourceDocument.getPageCount();
+  const pages = [];
+
+  for (let pageIndex = 0; pageIndex < count; pageIndex += 1) {
+    // Sao chép đối tượng trang gốc; không dùng canvas và không raster hóa trang.
+    const singlePageDocument = await window.PDFLib.PDFDocument.create();
+    const [copiedPage] = await singlePageDocument.copyPages(sourceDocument, [pageIndex]);
+    singlePageDocument.addPage(copiedPage);
+    const singlePageBytes = await singlePageDocument.save({
+      addDefaultPage: false,
+      useObjectStreams: true
+    });
+    const pageUrl = URL.createObjectURL(
+      new Blob([singlePageBytes], { type: "application/pdf" })
+    );
+    fileRecord.pageUrls.push(pageUrl);
+    pages.push({
+      id: crypto.randomUUID(),
+      source: fileRecord.file.name,
+      sourceIndex: fileIndex,
+      sourcePage: pageIndex + 1,
+      previewUrl: `${pageUrl}#toolbar=0&navpanes=0&scrollbar=0&view=Fit`,
+      rotation: 0,
+      selected: false
+    });
+  }
+
+  return pages;
 }
 
 async function acceptFiles(fileList) {
@@ -94,9 +133,19 @@ async function acceptFiles(fileList) {
   snapshot();
   for (const file of files) {
     const fileIndex = state.files.length;
-    const fileRecord = { file, url: URL.createObjectURL(file) };
+    const fileRecord = { file, pageUrls: [] };
     state.files.push(fileRecord);
-    state.pages.push(...await createPages(fileRecord, fileIndex));
+    try {
+      state.pages.push(...await createPages(fileRecord, fileIndex));
+    } catch (error) {
+      fileRecord.pageUrls.forEach((url) => URL.revokeObjectURL(url));
+      state.files.pop();
+      showToast(
+        error?.message?.toLowerCase().includes("encrypted")
+          ? `Không thể mở ${file.name}: PDF đang được bảo vệ bằng mật khẩu.`
+          : `Không thể tách đúng các trang của ${file.name}.`
+      );
+    }
   }
   elements.pdfInput.value = "";
   elements.addPdfInput.value = "";
@@ -284,7 +333,9 @@ elements.exportButton.addEventListener("click", showExportNotice);
 elements.topExportButton.addEventListener("click", showExportNotice);
 
 window.addEventListener("beforeunload", () => {
-  state.files.forEach((record) => URL.revokeObjectURL(record.url));
+  state.files.forEach((record) => {
+    record.pageUrls.forEach((url) => URL.revokeObjectURL(url));
+  });
 });
 
 render();

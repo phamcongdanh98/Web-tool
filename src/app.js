@@ -3,6 +3,7 @@
 import Fastify from "fastify";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { env } from "./config/env.js";
@@ -12,6 +13,7 @@ import { ensureTempRoot } from "./core/temp/temp-directory.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicRoot = path.resolve(__dirname, "../public");
+const pdfLibBrowserBundle = path.resolve(__dirname, "../node_modules/pdf-lib/dist/pdf-lib.min.js");
 
 export async function buildApp() {
   await ensureTempRoot();
@@ -34,6 +36,12 @@ export async function buildApp() {
 
   await app.register(multipart, {
     limits: { files: 1, fields: 20, parts: 25, fileSize: env.MAX_UPLOAD_BYTES, fieldSize: 1024 * 1024 }
+  });
+  app.get("/vendor/pdf-lib.min.js", (_, reply) => {
+    return reply
+      .type("application/javascript; charset=utf-8")
+      .header("Cache-Control", "public, max-age=31536000, immutable")
+      .send(fs.createReadStream(pdfLibBrowserBundle));
   });
   await app.register(fastifyStatic, { root: publicRoot, prefix: "/", index: false });
   await registerPageRoutes(app);
